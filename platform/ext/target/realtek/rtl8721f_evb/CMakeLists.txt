@@ -50,8 +50,8 @@ target_include_directories(platform_s
         .
         cmsis_core
         partition
-        os_wrapper/include
         ${HAL_REALTEK_COMMON_DIR}/include
+        ${HAL_REALTEK_OS_WRAPPER_DIR}/include
         ${HAL_REALTEK_SOC_DIR}/fwlib/include
         ${HAL_REALTEK_SOC_DIR}/fwlib/include/rom
         ${HAL_REALTEK_USRCFG_DIR}/include
