@@ -127,11 +127,9 @@ add_custom_command(
     COMMAND ${CMAKE_OBJDUMP} -d ${CMAKE_BINARY_DIR}/bin/tfm_s.axf > ${CMAKE_BINARY_DIR}/bin/tfm_s.asm
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/tfm_s.axf ${CMAKE_BINARY_DIR}/bin/target_pure_tfm.axf
     COMMAND ${CMAKE_STRIP} ${CMAKE_BINARY_DIR}/bin/target_pure_tfm.axf
-    COMMAND ${CMAKE_OBJCOPY} -j .gnu.sgstubs -j .TFM_VECTORS -j .TFM_UNPRIV_CODE
+    COMMAND ${CMAKE_OBJCOPY} -j .TFM_VECTORS
             -Obinary ${CMAKE_BINARY_DIR}/bin/target_pure_tfm.axf ${CMAKE_BINARY_DIR}/bin/ram_3_s.bin
-    COMMAND ${CMAKE_OBJCOPY} -R .gnu.sgstubs -R .TFM_VECTORS -R .TFM_UNPRIV_CODE
-            -Obinary ${CMAKE_BINARY_DIR}/bin/target_pure_tfm.axf ${CMAKE_BINARY_DIR}/bin/xip_3_s.bin
-
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/tfm_s.bin ${CMAKE_BINARY_DIR}/bin/xip_3_s.bin
     COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
             -i ${CMAKE_BINARY_DIR}/bin/ram_3_s.bin -l 32
     COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
@@ -140,7 +138,7 @@ add_custom_command(
     COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
             -o ${CMAKE_BINARY_DIR}/bin/ram_3_s_prepend.bin
             -i ${CMAKE_BINARY_DIR}/bin/ram_3_s.bin
-            -s Image$$ER_VENEER$$Base -m ${CMAKE_BINARY_DIR}/bin/tfm_s.raw.map
+            -s __vectors_start__ -m ${CMAKE_BINARY_DIR}/bin/tfm_s.raw.map
     COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
             -o ${CMAKE_BINARY_DIR}/bin/xip_3_s_prepend.bin
             -i ${CMAKE_BINARY_DIR}/bin/xip_3_s.bin

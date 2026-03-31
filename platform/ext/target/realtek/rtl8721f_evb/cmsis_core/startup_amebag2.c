@@ -7,6 +7,7 @@
  */
 
 #include "tfm_hal_device_header.h"
+#include "region.h"
 
 /*----------------------------------------------------------------------------
   External References
@@ -33,6 +34,11 @@ RAM_START_FUNCTION TFMEntryFun __VECTOR_TABLE_ATTRIBUTE = {
 /*----------------------------------------------------------------------------
   Reset Handler called on controller reset
  *----------------------------------------------------------------------------*/
+
+REGION_DECLARE(Image$$, TFM_UNPRIV_CODE_LOADADDR, $$Base);
+REGION_DECLARE(Image$$, TFM_UNPRIV_CODE_START, $$Base);
+REGION_DECLARE(Image$$, TFM_UNPRIV_CODE_END, $$Limit);
+
 void Reset_Handler(void)
 {
 #if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
@@ -46,6 +52,14 @@ void Reset_Handler(void)
 #if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
     __TZ_set_STACKSEAL_S((uint32_t *)(&__STACK_SEAL));
 #endif
+
+    u32 size  = (uint32_t)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_END, $$Limit) - (uint32_t)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_START, $$Base);
+    u32 *dst = (uint32_t *)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_START, $$Base);
+    u32 *src = (uint32_t *)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_LOADADDR, $$Base);
+    for (u32 idx = 0; idx < size / 4; idx++) {
+        dst[idx] = src[idx];
+    }
+    DCache_CleanInvalidate(0xFFFFFFFF, 0xFFFFFFFF);
 
     /* __NVIC_SetVector(SVCall_IRQn, (uint32_t)SVC_Handler); */
     /* __NVIC_SetVector(PendSV_IRQn, (uint32_t)PendSV_Handler); */

@@ -60,13 +60,13 @@ MEMORY
 .gnu.sgstubs : TFM_LINKER_VENEERS_START \
 { \
     *(.gnu.sgstubs*) \
-} > KM4TZ_BD_RAM_TZ_NSC \
+} > KM4TZ_BD_RAM_TZ_NSC AT > FLASH \
 /* GCC always places veneers at the end of .gnu.sgstubs section, so the only \
  * way to align the end of .gnu.sgstubs section is to align start of the \
  * next section */ \
 .sgstubs_end : TFM_LINKER_VENEERS_END \
 { \
-} > KM4TZ_BD_RAM_TZ_NSC
+} > KM4TZ_BD_RAM_TZ_NSC AT > FLASH
 
 __msp_stack_size__ = S_MSP_STACK_SIZE;
 
@@ -74,8 +74,6 @@ ENTRY(Reset_Handler)
 
 SECTIONS
 {
-    VENEERS()
-
     .msp_stack : ALIGN(TFM_LINKER_MSP_STACK_ALIGNMENT)
     {
         . += __msp_stack_size__ - 0x8;
@@ -95,16 +93,15 @@ SECTIONS
         KEEP(*(.vectors))
         . = ALIGN(4);
         __vectors_end__ = .;
-    } > RAM /* Special, need Bootlaoder Copy */
+    } > RAM AT > FLASH /* Special, need Bootlaoder Copy */
 
     ASSERT(__vectors_start__ != __vectors_end__, ".vectors should not be empty")
-}
 
-SECTIONS
-{
+    VENEERS()
+
     /* Start address of the code. */
     Image$$PT_RO_START$$Base = ORIGIN(FLASH);
-    . = Image$$PT_RO_START$$Base;
+    . =  LOADADDR(.gnu.sgstubs) + SIZEOF(.gnu.sgstubs);
 
     /**** Section for holding partition RO load data */
     /*
@@ -252,6 +249,10 @@ SECTIONS
         LONG (ADDR(.TFM_APP_ROT_LINKER_DATA))
         LONG (SIZEOF(.TFM_APP_ROT_LINKER_DATA) / 4)
 
+        LONG (LOADADDR(.gnu.sgstubs))
+        LONG (ADDR(.gnu.sgstubs))
+        LONG (SIZEOF(.gnu.sgstubs) / 4)
+
 #if defined (S_RAM_CODE_START)
         LONG (LOADADDR(.ER_CODE_SRAM))
         LONG (ADDR(.ER_CODE_SRAM))
@@ -306,9 +307,10 @@ SECTIONS
 
         KEEP(*(.eh_frame*))
         . = ALIGN(TFM_LINKER_UNPRIV_CODE_ALIGNMENT);
-    } > RAM /* Special, need Bootlaoder Copy for psa_api_veneers.o shall jump by s_veneers.o */
-    Image$$TFM_UNPRIV_CODE_START$$RO$$Base = ADDR(.TFM_UNPRIV_CODE);
-    Image$$TFM_UNPRIV_CODE_END$$RO$$Limit = ADDR(.TFM_UNPRIV_CODE) + SIZEOF(.TFM_UNPRIV_CODE);
+    } > RAM AT> FLASH /* Special, need Bootlaoder Copy for psa_api_veneers.o shall jump by s_veneers.o */
+    Image$$TFM_UNPRIV_CODE_LOADADDR$$Base = LOADADDR(.TFM_UNPRIV_CODE);
+    Image$$TFM_UNPRIV_CODE_START$$Base = ADDR(.TFM_UNPRIV_CODE);
+    Image$$TFM_UNPRIV_CODE_END$$Limit = ADDR(.TFM_UNPRIV_CODE) + SIZEOF(.TFM_UNPRIV_CODE);
 
     /* Position tag */
     . = ALIGN(TFM_LINKER_PT_RO_ALIGNMENT);
