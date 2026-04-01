@@ -67,7 +67,7 @@ target_sources(platform_s
         cmsis_drivers/Driver_Flash.c
         ${PLATFORM_DIR}/ext/target/arm/drivers/mpu/armv8m/mpu_armv8m_drv.c
         # $<$<AND:$<NOT:$<BOOL:${TFM_PARTITION_SLIH_TEST}>>,$<NOT:$<BOOL:${TFM_PARTITION_FLIH_TEST}>>>:${CMAKE_CURRENT_SOURCE_DIR}/native_drivers/timer_cmsdk/timer_cmsdk.c>
-        $<$<OR:$<BOOL:${TFM_S_REG_TEST}>,$<BOOL:${TFM_NS_REG_TEST}>>:${CMAKE_CURRENT_SOURCE_DIR}/plat_test.c>
+        # $<$<OR:$<BOOL:${TFM_S_REG_TEST}>,$<BOOL:${TFM_NS_REG_TEST}>>:${CMAKE_CURRENT_SOURCE_DIR}/plat_test.c>
         $<$<BOOL:${TFM_PARTITION_PLATFORM}>:${CMAKE_CURRENT_SOURCE_DIR}/services/src/tfm_platform_system.c>
 )
 
@@ -91,6 +91,11 @@ target_compile_definitions(platform_s
         CONFIG_ARM_CORE_CM4_KM4TZ
 )
 
+target_compile_definitions(platform_region_defs
+    INTERFACE
+        $<$<BOOL:${TFM_S_REG_TEST}>:TFM_S_REG_TEST=1>
+)
+
 # Add ROM symbol linker script for Realtek AmebaG2
 target_link_libraries(platform_s
     PUBLIC
@@ -104,10 +109,44 @@ target_sources(tfm_spm
         target_cfg.c
         tfm_hal_isolation.c
         tfm_hal_platform.c
-        $<$<OR:$<BOOL:${CONFIG_TFM_FLIH_API}>,$<BOOL:${CONFIG_TFM_SLIH_API}>>:${CMAKE_CURRENT_SOURCE_DIR}/tfm_interrupts.c>
+        # $<$<OR:$<BOOL:${CONFIG_TFM_FLIH_API}>,$<BOOL:${CONFIG_TFM_SLIH_API}>>:${CMAKE_CURRENT_SOURCE_DIR}/tfm_interrupts.c>
 )
 
 #========================= Files for building NS side platform ================#
+
+install(DIRECTORY   ${TARGET_PLATFORM_PATH}/cmsis_core
+                    # ${PLATFORM_DIR}/include/
+        DESTINATION ${INSTALL_PLATFORM_NS_DIR})
+
+install(DIRECTORY   ${PLATFORM_DIR}/ext/common
+        DESTINATION ${INSTALL_PLATFORM_NS_DIR}/ext)
+
+install(FILES       ${CMAKE_CURRENT_SOURCE_DIR}/tfm_hal_platform.c
+        DESTINATION ${INSTALL_PLATFORM_NS_DIR})
+
+install(FILES       ${TARGET_PLATFORM_PATH}/partition/region_defs.h
+                    ${TARGET_PLATFORM_PATH}/partition/flash_layout.h
+                    ${PLATFORM_DIR}/include/tfm_hal_device_header.h
+                    ${TARGET_PLATFORM_PATH}/device_cfg.h
+                    ${TARGET_PLATFORM_PATH}/target_cfg.h
+                    ${TARGET_PLATFORM_PATH}/tfm_peripherals_def.h
+                    ${PLATFORM_DIR}/../secure_fw/partitions/initial_attestation/attest.h
+                    ${PLATFORM_DIR}/../secure_fw/partitions/initial_attestation/attest_token.h
+                    ${PLATFORM_DIR}/../secure_fw/spm/include/boot/tfm_boot_status.h
+        DESTINATION ${INSTALL_PLATFORM_NS_DIR}/include)
+
+install(FILES       ${CMAKE_CURRENT_SOURCE_DIR}/ld/tfm_ns_ameba.ld
+        DESTINATION ${INSTALL_PLATFORM_NS_DIR}/linker_scripts)
+
+# copy all files from active platform directory
+install(DIRECTORY   ${TARGET_PLATFORM_PATH}/ns/
+        DESTINATION ${INSTALL_PLATFORM_NS_DIR})
+
+install(FILES       ${TARGET_PLATFORM_PATH}/hal_realtek.cmake
+        DESTINATION ${INSTALL_PLATFORM_NS_DIR})
+
+install(FILES       ${TARGET_PLATFORM_PATH}/cpuarch.cmake
+        DESTINATION ${INSTALL_PLATFORM_NS_DIR})
 
 # Copy the platform specific config
 install(FILES       ${TARGET_PLATFORM_PATH}/config.cmake

@@ -49,7 +49,7 @@
  */
 
 /* Size of a Secure and of a Non-secure image */
-#define FLASH_S_PARTITION_SIZE          (120 * 1024) /* S partition: 512 KB */
+#define FLASH_S_PARTITION_SIZE          (256 * 1024) /* S partition: 512 KB */
 #define FLASH_NS_PARTITION_SIZE         (0x80000) /* NS partition: 512 KB */
 
 #if (FLASH_S_PARTITION_SIZE > FLASH_NS_PARTITION_SIZE)
@@ -64,7 +64,7 @@
 
 /* Flash layout info for BL2 bootloader */
 /* RTL8721F Flash base address */
-#define FLASH_BASE_ADDRESS              (0x04000000)
+#define FLASH_BASE_ADDRESS              (0x08000000)
 
 /* Offset and size definitions of the flash partitions that are handled by the
  * bootloader. The image swapping is done between IMAGE_PRIMARY and
@@ -130,8 +130,7 @@
 #endif /* MCUBOOT_IMAGE_NUMBER */
 
 /* Protected Storage (PS) Service definitions */
-#define FLASH_PS_AREA_OFFSET            (FLASH_AREA_SCRATCH_OFFSET + \
-                                         FLASH_AREA_SCRATCH_SIZE)
+#define FLASH_PS_AREA_OFFSET            (0x00256000)
 #define FLASH_PS_AREA_SIZE              (0x5000)   /* 20 KB */
 
 /* Internal Trusted Storage (ITS) Service definitions */
@@ -212,7 +211,12 @@
 #define NS_ROM_ALIAS_BASE (0x04000020)  /* Non-Secure Flash base (same physical flash) */
 
 #define S_RAM_ALIAS_BASE  (0x20007000)  /* Secure SRAM base */
-#define NS_RAM_ALIAS_BASE (0x20000000)  /* Non-Secure SRAM base */
+
+#ifndef TFM_NS_REG_TEST
+#define NS_RAM_ALIAS_BASE (0x20016020)  /* Non-Secure SRAM base */
+#else
+#define NS_RAM_ALIAS_BASE (0x2002a020)  /* Non-Secure SRAM base */
+#endif
 
 #define TOTAL_ROM_SIZE FLASH_TOTAL_SIZE
 #define TOTAL_RAM_SIZE (0x00080000)     /* 512 KB SRAM */

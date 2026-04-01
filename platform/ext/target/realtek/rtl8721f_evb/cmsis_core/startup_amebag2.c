@@ -31,6 +31,9 @@ RAM_START_FUNCTION TFMEntryFun __VECTOR_TABLE_ATTRIBUTE = {
     (uint32_t)0
 };
 
+#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 1U)
+HAL_VECTOR_FUN RamVectorTable[95] __attribute__((aligned(512), section(".noinit")));
+#endif
 /*----------------------------------------------------------------------------
   Reset Handler called on controller reset
  *----------------------------------------------------------------------------*/
@@ -53,6 +56,7 @@ void Reset_Handler(void)
     __TZ_set_STACKSEAL_S((uint32_t *)(&__STACK_SEAL));
 #endif
 
+#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
     u32 size  = (uint32_t)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_END, $$Limit) - (uint32_t)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_START, $$Base);
     u32 *dst = (uint32_t *)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_START, $$Base);
     u32 *src = (uint32_t *)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_LOADADDR, $$Base);
@@ -65,6 +69,28 @@ void Reset_Handler(void)
     /* __NVIC_SetVector(PendSV_IRQn, (uint32_t)PendSV_Handler); */
 	SVCall_irqfunc_set(SVC_Handler);
 	PendSV_irqfunc_set(PendSV_Handler);
+#else
+    extern void SysTick_Handler (void);
+
+    SCB->VTOR = (u32)RomVectorTable;
+
+    uint32_t *pSrc  = (uint32_t *)RomVectorTable;
+    uint32_t *pDest = (uint32_t *)RamVectorTable;
+    uint32_t count  = sizeof(RamVectorTable) / sizeof(uint32_t);
+
+    for (uint32_t i = 0; i < count; i++) {
+        pDest[i] = pSrc[i];
+    }
+    RamVectorTable[0]  = (HAL_VECTOR_FUN)MSP_RAM_HP_NS;
+    RamVectorTable[11] = SVC_Handler;
+    RamVectorTable[14] = PendSV_Handler;
+    RamVectorTable[15] = SysTick_Handler;
+
+    __DSB(); 
+    SCB->VTOR = (uint32_t)RamVectorTable;
+    __DSB();
+    __ISB();
+#endif
 
     SystemInit();                             /* CMSIS System Initialization */
     __PROGRAM_START();                        /* Enter PreMain (C library entry point) */
