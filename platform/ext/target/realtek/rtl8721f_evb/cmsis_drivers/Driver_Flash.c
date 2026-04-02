@@ -33,8 +33,9 @@
 /* Flash memory emulated over external SSRAM memory */
 #define FLASH0_SIZE                    0x00400000  /* 4 MB */
 #define FLASH0_SECTOR_SIZE             0x00001000  /* 4 kB */
-#define FLASH0_PAGE_SIZE               0x00001000  /* 4 kB */
+#define FLASH0_PAGE_SIZE               0x00000100  /* 256 B */
 #define FLASH0_PROGRAM_UNIT            0x1         /* Minimum write size */
+#define FLASH_CHECK_BUF_SIZE           64          /* size checked per read */
 
 /**
  * Data width values for ARM_FLASH_CAPABILITIES::data_width
@@ -117,101 +118,47 @@ static int32_t is_sector_aligned(struct arm_flash_dev_t *flash_dev,
     return rc;
 }
 
-#ifdef AMEBA_NONEED
-static int32_t is_flash_ready_to_write(const uint8_t *start_addr, uint32_t cnt)
+static int32_t is_flash_ready_to_write(uint32_t addr, uint32_t cnt)
 {
-    int32_t rc = 0;
+    uint8_t read_buf[FLASH_CHECK_BUF_SIZE];
+    uint32_t offset = 0;
+    uint32_t check_len;
     uint32_t i;
 
-    for (i = 0; i < cnt; i++) {
-        if(start_addr[i] != ARM_FLASH_DRV_ERASE_VALUE) {
-            rc = -1;
-            break;
+    while (cnt > 0) {
+        check_len = (cnt > FLASH_CHECK_BUF_SIZE) ? FLASH_CHECK_BUF_SIZE : cnt;
+
+        if (FLASH_ReadStream(addr + offset, check_len, read_buf) != 1) {
+            return -1;
         }
+
+        for (i = 0; i < check_len; i++) {
+            if(read_buf[i] != ARM_FLASH_DRV_ERASE_VALUE) {
+                return -1; 
+            }
+        }
+
+        cnt -= check_len;
+        offset += check_len;
     }
 
-    return rc;
+    return 0;
 }
-#endif
 
 #if (RTE_FLASH0)
-uint32_t ulSetInterruptMaskFromISR( void ) /* __attribute__(( naked )) PRIVILEGED_FUNCTION */
-{
-	__asm volatile
-	(
-	"	mrs r0, PRIMASK									\n"
-	"	cpsid i											\n"
-	"	bx lr											\n"
-	::: "memory"
-	);
-
-#if !(defined (__ARMCC_VERSION) && (__ARMCC_VERSION >= 6010050))
-	/* To avoid compiler warnings.  The return statement will never be reached,
-	 * but some compilers warn if it is not included, while others won't compile
-	 * if it is. */
-	return 0;
-#endif
-}
-
-void vClearInterruptMaskFromISR( __attribute__( ( unused ) ) uint32_t ulMask ) /* __attribute__(( naked )) PRIVILEGED_FUNCTION */
-{
-	__asm volatile
-	(
-	"	msr PRIMASK, r0									\n"
-	"	bx lr											\n"
-	::: "memory"
-	);
-
-#if !(defined (__ARMCC_VERSION) && (__ARMCC_VERSION >= 6010050))
-	/* Just to avoid compiler warning.  ulMask is used from the asm code but
-	 * the compiler can't see that.  Some compilers generate warnings without
-	 * the following line, while others generate warnings if the line is
-	 * included. */
-	( void ) ulMask;
-#endif
-}
-
 static uint32_t PrevIrqStatus;
 
 void FLASH_Write_Lock(void)
 {
 	/* disable irq */
-	PrevIrqStatus = ulSetInterruptMaskFromISR();
+	PrevIrqStatus = __get_PRIMASK();
+	__disable_irq();
 }
 
 void FLASH_Write_Unlock(void)
 {
 	/* restore irq */
-	vClearInterruptMaskFromISR(PrevIrqStatus);
-}
-
-#define EraseChip				0
-#define EraseBlock				1
-#define EraseSector				2
-
-int FLASH_WriteStream(u32 address, u32 len, u8 *pbuf)
-{
-	u32 page_begin = address & (~0xff);
-	u32 page_end = (address + len - 1) & (~0xff);
-	u32 page_cnt = ((page_end - page_begin) >> 8) + 1;
-
-	u32 addr_begin = address;
-	u32 addr_end = (page_cnt == 1) ? (address + len) : (page_begin + 0x100);
-	u32 size = addr_end - addr_begin;
-
-	FLASH_Write_Lock();
-	while (page_cnt) {
-		FLASH_TxData(addr_begin, size, pbuf);
-		pbuf += size;
-
-		page_cnt--;
-		addr_begin = addr_end;
-		addr_end = (page_cnt == 1) ? (address + len) : (addr_begin + 0x100);
-		size = addr_end - addr_begin;
-	}
-
-	FLASH_Write_Unlock();
-	return 0;
+	__set_PRIMASK(PrevIrqStatus);
 }
 
 static ARM_FLASH_INFO ARM_FLASH0_DEV_DATA = {
@@ -245,12 +192,6 @@ static ARM_FLASH_CAPABILITIES ARM_Flash_GetCapabilities(void)
 static int32_t ARM_Flash_Initialize(ARM_Flash_SignalEvent_t cb_event)
 {
     ARG_UNUSED(cb_event);
-
-    if (FLASH0_PROGRAM_UNIT % data_width_byte[DriverCapabilities.data_width] ||
-        DriverCapabilities.data_width >= DATA_WIDTH_ENUM_SIZE) {
-        return ARM_DRIVER_ERROR;
-    }
-    /* Nothing to be done */
     return ARM_DRIVER_OK;
 }
 
@@ -295,15 +236,7 @@ static int32_t ARM_Flash_ReadData(uint32_t addr, void *data, uint32_t cnt)
 		return ARM_DRIVER_ERROR_PARAMETER;
 	}
 
-#ifdef AMEBA_NONEED
-	/* Flash interface just emulated over SRAM, use memcpy */
-	uint32_t start_addr = FLASH0_DEV->memory_base + addr;
-	memcpy(data, (void *)start_addr, cnt);
-#else
-	FLASH_Write_Lock();
-	FLASH_RxData(0, addr, cnt, data);
-	FLASH_Write_Unlock();
-#endif
+	FLASH_ReadStream(addr, cnt, (u8 *)data);
 
 	/* Conversion between bytes and data items */
 	cnt /= data_width_byte[DriverCapabilities.data_width];
@@ -327,16 +260,13 @@ static int32_t ARM_Flash_ProgramData(uint32_t addr, const void *data,
 		return ARM_DRIVER_ERROR_PARAMETER;
 	}
 
-#ifdef AMEBA_NONEED
-	uint32_t start_addr = FLASH0_DEV->memory_base + addr;
-	/* Check if the flash area to write the data was erased previously */
-	rc = is_flash_ready_to_write((const uint8_t *)start_addr, cnt);
+    /* Check if the flash area to write the data was erased previously */
+    rc = is_flash_ready_to_write(addr, cnt);
+    if (rc != 0) {
+        return ARM_DRIVER_ERROR;
+    }
 
-	/* Flash interface just emulated over SRAM, use memcpy */
-	memcpy((void *)start_addr, data, cnt);
-#else
 	FLASH_WriteStream(addr, cnt, (u8 *)data);
-#endif
 
 	/* Conversion between bytes and data items */
 	cnt /= data_width_byte[DriverCapabilities.data_width];
@@ -354,40 +284,16 @@ static int32_t ARM_Flash_EraseSector(uint32_t addr)
 		return ARM_DRIVER_ERROR_PARAMETER;
 	}
 
-#ifdef AMEBA_NONEED
-	uint32_t start_addr = FLASH0_DEV->memory_base + addr;
-	/* Flash interface just emulated over SRAM, use memset */
-	memset((void *)start_addr,
-		   FLASH0_DEV->data->erased_value,
-		   FLASH0_DEV->data->sector_size);
-#else
-	FLASH_Write_Lock();
-	FLASH_Erase(EraseSector, addr);
-	FLASH_Write_Unlock();
-#endif
+	FLASH_EraseXIP(EraseSector, addr);
+
 	return ARM_DRIVER_OK;
 }
 
 static int32_t ARM_Flash_EraseChip(void)
 {
-	int32_t rc = ARM_DRIVER_ERROR_UNSUPPORTED;
-#ifdef AMEBA_NONEED
-	uint32_t i;
-	uint32_t addr = FLASH0_DEV->memory_base;
-	/* Check driver capability erase_chip bit */
-	if (DriverCapabilities.erase_chip == 1) {
-		for (i = 0; i < FLASH0_DEV->data->sector_count; i++) {
-			/* Flash interface just emulated over SRAM, use memset */
-			memset((void *)addr,
-				   FLASH0_DEV->data->erased_value,
-				   FLASH0_DEV->data->sector_size);
+	FLASH_EraseXIP(EraseChip, 0);
 
-			addr += FLASH0_DEV->data->sector_size;
-			rc = ARM_DRIVER_OK;
-		}
-	}
-#endif
-	return rc;
+	return ARM_DRIVER_OK;
 }
 
 static ARM_FLASH_STATUS ARM_Flash_GetStatus(void)
