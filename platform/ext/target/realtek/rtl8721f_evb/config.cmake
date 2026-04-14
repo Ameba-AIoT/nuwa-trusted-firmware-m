@@ -23,4 +23,4 @@ set(MCUBOOT_HW_KEY                    OFF          CACHE BOOL      "Whether to e
 set(MCUBOOT_BUILTIN_KEY               ON           CACHE BOOL      "Use builtin key(s) for validation, no public key data is embedded into the image metadata")
 
 set(HAL_REALTEK_PATH                  "DOWNLOAD"   CACHE PATH      "Path to hal_realtek (or DOWNLOAD to fetch automatically")
-set(HAL_REALTEK_VERSION               "dd1c525"    CACHE STRING    "The version of hal_realtek to use")
+set(HAL_REALTEK_VERSION               "main"       CACHE STRING    "The version of hal_realtek to use")
