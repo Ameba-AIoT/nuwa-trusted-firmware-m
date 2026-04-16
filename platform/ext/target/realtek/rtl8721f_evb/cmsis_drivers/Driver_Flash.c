@@ -134,7 +134,7 @@ static int32_t is_flash_ready_to_write(uint32_t addr, uint32_t cnt)
 
         for (i = 0; i < check_len; i++) {
             if(read_buf[i] != ARM_FLASH_DRV_ERASE_VALUE) {
-                return -1; 
+                return -1;
             }
         }
 

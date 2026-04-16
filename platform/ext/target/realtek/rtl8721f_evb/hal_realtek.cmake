@@ -37,3 +37,4 @@ set(HAL_REALTEK_PRJ_DIR          ${HAL_REALTEK_PATH}/ameba/${TARGET_SOC} CACHE P
 set(HAL_REALTEK_COMMON_DIR       ${HAL_REALTEK_PATH}/ameba/common CACHE PATH   "")
 set(HAL_REALTEK_OS_WRAPPER_DIR   ${HAL_REALTEK_PATH}/ameba/common/os_wrapper CACHE PATH   "")
 set(HAL_REALTEK_USRCFG_DIR       ${HAL_REALTEK_PATH}/ameba/usrcfg/${TARGET_SOC} CACHE PATH   "")
+set(HAL_REALTEK_LIB_DIR          ${HAL_REALTEK_PATH}/zephyr/blobs/ameba/${TARGET_SOC}/lib CACHE PATH   "")

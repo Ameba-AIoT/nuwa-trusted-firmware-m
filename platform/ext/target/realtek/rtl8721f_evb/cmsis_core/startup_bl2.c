@@ -7,7 +7,6 @@
  */
 
 #include "tfm_hal_device_header.h"
-#include "region.h"
 
 /*----------------------------------------------------------------------------
   External References
@@ -25,33 +24,9 @@ extern __NO_RETURN void __PROGRAM_START(void);
  *----------------------------------------------------------------------------*/
 __NO_RETURN void Reset_Handler (void);
 
-#ifdef BL2
-typedef void (*VECTOR_TABLE_Type)(void);
-const VECTOR_TABLE_Type __VECTOR_TABLE[] __VECTOR_TABLE_ATTRIBUTE = {
-  (VECTOR_TABLE_Type)(&__INITIAL_SP),     /*      Initial Stack Pointer */
-/* Exceptions */
-    Reset_Handler,
-    /*REVIEW: need more? */
-};
-#else
-RAM_START_FUNCTION TFMEntryFun __VECTOR_TABLE_ATTRIBUTE = {
-    Reset_Handler,
-    NULL,
-    (uint32_t)0
-};
-#endif
-
-#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 1U)
-HAL_VECTOR_FUN RamVectorTable[95] __attribute__((aligned(512), section(".noinit")));
-#endif
 /*----------------------------------------------------------------------------
   Reset Handler called on controller reset
  *----------------------------------------------------------------------------*/
-
-REGION_DECLARE(Image$$, TFM_UNPRIV_CODE_LOADADDR, $$Base);
-REGION_DECLARE(Image$$, TFM_UNPRIV_CODE_START, $$Base);
-REGION_DECLARE(Image$$, TFM_UNPRIV_CODE_END, $$Limit);
-
 void Reset_Handler(void)
 {
 #if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
@@ -66,46 +41,19 @@ void Reset_Handler(void)
     __TZ_set_STACKSEAL_S((uint32_t *)(&__STACK_SEAL));
 #endif
 
-#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
-    u32 size  = (uint32_t)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_END, $$Limit) - (uint32_t)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_START, $$Base);
-    u32 *dst = (uint32_t *)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_START, $$Base);
-    u32 *src = (uint32_t *)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_LOADADDR, $$Base);
-    for (u32 idx = 0; idx < size / 4; idx++) {
-        dst[idx] = src[idx];
-    }
-    DCache_CleanInvalidate(0xFFFFFFFF, 0xFFFFFFFF);
-
     /* __NVIC_SetVector(SVCall_IRQn, (uint32_t)SVC_Handler); */
     /* __NVIC_SetVector(PendSV_IRQn, (uint32_t)PendSV_Handler); */
 	SVCall_irqfunc_set(SVC_Handler);
 	PendSV_irqfunc_set(PendSV_Handler);
-#else
-    extern void SysTick_Handler (void);
-
-    SCB->VTOR = (u32)RomVectorTable;
-
-    uint32_t *pSrc  = (uint32_t *)RomVectorTable;
-    uint32_t *pDest = (uint32_t *)RamVectorTable;
-    uint32_t count  = sizeof(RamVectorTable) / sizeof(uint32_t);
-
-    for (uint32_t i = 0; i < count; i++) {
-        pDest[i] = pSrc[i];
-    }
-    RamVectorTable[0]  = (HAL_VECTOR_FUN)MSP_RAM_HP_NS;
-    RamVectorTable[11] = SVC_Handler;
-    RamVectorTable[14] = PendSV_Handler;
-    RamVectorTable[15] = SysTick_Handler;
-
-    __DSB();
-    SCB->VTOR = (uint32_t)RamVectorTable;
-    __DSB();
-    __ISB();
-#endif
 
     SystemInit();                             /* CMSIS System Initialization */
     __PROGRAM_START();                        /* Enter PreMain (C library entry point) */
 }
 
+/* This is a stub to make the linker happy */
+void __Vectors(){}
+void SVC_Handler(void){}
+void PendSV_Handler(void){}
 /*
  * Reset_Handler
  *     ├─► Disable interrupts (cpsid i)

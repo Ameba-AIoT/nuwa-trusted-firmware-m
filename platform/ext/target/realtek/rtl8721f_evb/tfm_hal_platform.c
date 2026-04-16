@@ -10,6 +10,8 @@
 #include "tfm_hal_platform.h"
 #include "tfm_plat_defs.h"
 #include "uart_stdout.h"
+#include "flash_layout.h"
+#include "fih.h"
 
 /* LOGUART function from HAL */
 extern void LOGUART_PutChar(uint8_t c);
@@ -20,6 +22,10 @@ extern const struct memory_region_limits memory_regions;
 void stdio_init(void)
 {
 	/* LOGUART is initialized by HAL, no additional setup needed */
+}
+
+void stdio_uninit(void)
+{
 }
 
 FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_platform_init(void)
@@ -88,15 +94,26 @@ uint32_t tfm_hal_get_ns_VTOR(void)
 uint32_t tfm_hal_get_ns_MSP(void)
 {
 	// return *((uint32_t *)memory_regions.non_secure_code_start);
+#ifdef BL2
+	return *((uint32_t *)(NS_AP_LOGIC_BASE + BL2_HEADER_SIZE));
+#else
 	return __TZ_get_MSP_NS(); // Already Done in Bootloader
+#endif
 }
 #endif
 
 uint32_t tfm_hal_get_ns_entry_point(void)
 {
-	// return *((uint32_t *)(memory_regions.non_secure_code_start + 4));
+	/*NOTE: memory_regions.non_secure_code_start is calculated by:
+	 *      NS_ROM_ALIAS_BASE + (FLASH_AREA_BL2_SIZE + FLASH_S_PARTITION_SIZE + BL2_HEADER_SIZE)
+	 */
+	/* return *((uint32_t *)(memory_regions.non_secure_code_start + 4)); */
+#ifdef BL2
+	return *((uint32_t *)(NS_AP_LOGIC_BASE + BL2_HEADER_SIZE + 4));
+#else
 	PRAM_START_FUNCTION Image2EntryFun = (PRAM_START_FUNCTION)__image2_entry_func__;
 	return (uint32_t)Image2EntryFun->RamStartFun;
+#endif
 }
 
 int stdio_output_string(const char *str, uint32_t len)

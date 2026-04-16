@@ -49,7 +49,7 @@
  */
 
 /* Size of a Secure and of a Non-secure image */
-#define FLASH_S_PARTITION_SIZE          (256 * 1024) /* S partition: 512 KB */
+#define FLASH_S_PARTITION_SIZE          (256 * 1024) /* S partition: 256 KB */
 #define FLASH_NS_PARTITION_SIZE         (0x80000) /* NS partition: 512 KB */
 
 #if (FLASH_S_PARTITION_SIZE > FLASH_NS_PARTITION_SIZE)
@@ -64,7 +64,12 @@
 
 /* Flash layout info for BL2 bootloader */
 /* RTL8721F Flash base address */
-#define FLASH_BASE_ADDRESS              (0x08000000)
+#ifdef BL2
+#define FLASH_BASE_ADDRESS              (0x103FF000)
+#define FLASH_PHY_BASE_ADDRESS          (0x08000000)
+#else
+#define FLASH_BASE_ADDRESS          (0x08000000)
+#endif
 
 /* Offset and size definitions of the flash partitions that are handled by the
  * bootloader. The image swapping is done between IMAGE_PRIMARY and
@@ -72,7 +77,7 @@
  * swapping.
  */
 #define FLASH_AREA_BL2_OFFSET      (0x0)
-#define FLASH_AREA_BL2_SIZE        (0x14000) /* 80 KB - matches RTL8721F bootloader */
+#define FLASH_AREA_BL2_SIZE        (0x40000) /* 256 KB - matches RTL8721F bootloader */
 
 #if !defined(MCUBOOT_IMAGE_NUMBER) || (MCUBOOT_IMAGE_NUMBER == 1)
 /* Secure + Non-secure image primary slot */
@@ -220,5 +225,8 @@
 
 #define TOTAL_ROM_SIZE FLASH_TOTAL_SIZE
 #define TOTAL_RAM_SIZE (0x00080000)     /* 512 KB SRAM */
+
+#define NS_AP_LOGIC_BASE (0x04000000)
+#define NS_NP_LOGIC_BASE (0x02000000)
 
 #endif /* __FLASH_LAYOUT_H__ */
