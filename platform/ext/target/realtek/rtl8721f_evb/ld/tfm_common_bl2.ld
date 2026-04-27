@@ -39,8 +39,6 @@ SECTIONS
     .text (READONLY) :
     {
         KEEP(*(.vectors))
-        __Vectors_End = .;
-        __Vectors_Size = __Vectors_End - __Vectors;
         __end__ = .;
         __km4tz_boot_text_start__ = ABSOLUTE(.);
         KEEP(*(SORT_BY_NAME(.image1.entry.data*)))

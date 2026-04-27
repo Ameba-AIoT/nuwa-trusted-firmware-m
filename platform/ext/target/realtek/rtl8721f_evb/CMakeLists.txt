@@ -187,6 +187,7 @@ if(BL2)
             .
             ${HAL_REALTEK_SOC_DIR}/fwlib/include
             ${HAL_REALTEK_SOC_DIR}/loader/bootloader
+            ${HAL_REALTEK_SOC_DIR}/loader/mcuboot
             # ${HAL_REALTEK_SOC_DIR}/fwlib/include/rom
             ${HAL_REALTEK_SOC_DIR}/../include
             ${HAL_REALTEK_COMMON_DIR}/include
@@ -201,7 +202,7 @@ if(BL2)
             tfm_hal_platform.c
             ${HAL_REALTEK_SOC_DIR}/loader/mcuboot/boot_prepare.c
 
-            ${CMAKE_CURRENT_SOURCE_DIR}/cmsis_core/startup_bl2.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/../common/startup_bl2.c
             ${CMAKE_CURRENT_SOURCE_DIR}/cmsis_core/system_core_init.c
             ${CMAKE_CURRENT_SOURCE_DIR}/amebag2_otp.c
             ${AUTO_GEN_SECURE_PUB_C}
