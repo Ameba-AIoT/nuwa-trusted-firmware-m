@@ -18,7 +18,7 @@
 #ifndef __FLASH_LAYOUT_H__
 #define __FLASH_LAYOUT_H__
 
-/* Flash layout on RTL8721F (AmebaG2) without BL2:
+/* Flash layout on RTL8721Dx (Amebadplus) without BL2:
  *
  * 0x0400_0000 Secure     image (512 KB)
  * 0x0408_0000 Non-secure image (512 KB)
@@ -26,19 +26,17 @@
  * 0x0410_5000 Internal Trusted Storage Area (16 KB)
  * 0x0410_9000 OTP / NV counters area (8 KB)
  *
- * Flash layout on RTL8721F (AmebaG2) with BL2 (single image boot):
+ * Flash layout on RTL8721Dx (Amebadplus) with BL2 (IMAGE_NUMBER=2):
  *
  * 0x0400_0000 BL2 - MCUBoot (80 KB)
- * 0x0401_4000 Primary image area (1 MB):
- *    0x0401_4000 Secure     image primary
- *    0x0409_4000 Non-secure image primary
- * 0x0411_4000 Secondary image area (1 MB):
- *    0x0411_4000 Secure     image secondary
- *    0x0419_4000 Non-secure image secondary
- * 0x0421_4000 Scratch area
- * 0x0421_4000 Protected Storage Area (20 KB)
- * 0x0421_9000 Internal Trusted Storage Area (16 KB)
- * 0x0421_D000 OTP / NV counters area (8 KB)
+ * 0x0401_4000 Secure     image primary   (256 KB)
+ * 0x0405_4000 Non-secure image primary   (512 KB)
+ * 0x040D_4000 Secure     image secondary (256 KB)
+ * 0x0411_4000 Non-secure image secondary (512 KB)
+ * 0x0419_4000 Scratch area               (512 KB)
+ * 0x0421_4000 Protected Storage Area     (20 KB)
+ * 0x0421_9000 Internal Trusted Storage   (16 KB)
+ * 0x0421_D000 OTP / NV counters area     (8 KB)
  */
 
 /* This header file is included from linker scatter file as well, where only a
@@ -49,7 +47,7 @@
  */
 
 /* Size of a Secure and of a Non-secure image */
-#define FLASH_S_PARTITION_SIZE          (256 * 1024) /* S partition: 256 KB */
+#define FLASH_S_PARTITION_SIZE          (0x40000) /* S partition: 256 KB */
 #define FLASH_NS_PARTITION_SIZE         (0x80000) /* NS partition: 512 KB */
 
 #if (FLASH_S_PARTITION_SIZE > FLASH_NS_PARTITION_SIZE)
@@ -63,12 +61,22 @@
 #define FLASH_TOTAL_SIZE                (0x00400000) /* 4 MB */
 
 /* Flash layout info for BL2 bootloader */
-/* RTL8721F Flash base address */
+/* RTL872XDA Flash base address */
 #ifdef BL2
-#define FLASH_BASE_ADDRESS              (0x103FF000)
+#define FLASH_BASE_ADDRESS              (0x0F7FF000) /* KM4_BOOT_XIP - 0x20 - 0x1000 */
 #define FLASH_PHY_BASE_ADDRESS          (0x08000000)
+
+/* S image load address for MCUBoot IMAGE_F_RAM_LOAD.
+ * ih_load_addr = S_IMAGE_LOAD_ADDRESS; payload lands at ih_load_addr + ih_hdr_size
+ * = S_RAM_ALIAS_BASE = 0x2000B020 (S image VMA base, where vector table lives). */
+#define S_IMAGE_LOAD_ADDRESS            (S_RAM_ALIAS_BASE - 0x400)
+
+/* Executable RAM range for MCUBoot MCUBOOT_RAM_LOAD validation.
+ * Must cover the S image VMA range [S_RAM_ALIAS_BASE, S_RAM_ALIAS_BASE + S_DATA_SIZE). */
+#define IMAGE_EXECUTABLE_RAM_START      (S_RAM_ALIAS_BASE)
+#define IMAGE_EXECUTABLE_RAM_SIZE       (0x2B000)  /* S_DATA_SIZE = 172KB */
 #else
-#define FLASH_BASE_ADDRESS          (0x08000000)
+#define FLASH_BASE_ADDRESS              (0x08000000)
 #endif
 
 /* Offset and size definitions of the flash partitions that are handled by the
@@ -77,7 +85,7 @@
  * swapping.
  */
 #define FLASH_AREA_BL2_OFFSET      (0x0)
-#define FLASH_AREA_BL2_SIZE        (0x40000) /* 256 KB - matches RTL8721F bootloader */
+#define FLASH_AREA_BL2_SIZE        (0x40000) /* 80 KB - matches RTL8721F bootloader */
 
 #if !defined(MCUBOOT_IMAGE_NUMBER) || (MCUBOOT_IMAGE_NUMBER == 1)
 /* Secure + Non-secure image primary slot */
@@ -211,26 +219,32 @@
 #define TFM_OTP_NV_COUNTERS_BACKUP_AREA_ADDR (TFM_OTP_NV_COUNTERS_AREA_ADDR + \
                                               TFM_OTP_NV_COUNTERS_AREA_SIZE)
 
-/* RTL8721F (AmebaG2) memory aliases */
-#define S_ROM_ALIAS_BASE  (0x00C00020)  /* Secure Flash base (XIP virtual address, no S-bit prefix) */
-#define NS_ROM_ALIAS_BASE (0x04000020)  /* Non-Secure Flash base (same physical flash) */
+/* RTL8721Dx (Amebadpluse) memory aliases */
+#define S_ROM_ALIAS_BASE  (0x0E000020)  /* Amebadpluse is not XIP, noused */
+#define NS_ROM_ALIAS_BASE (0x0E000020)  /* Non-Secure Flash base (same physical flash) */
 
-#define S_RAM_ALIAS_BASE  (0x20007000)  /* Secure SRAM base */
+// #define S_RAM_ALIAS_BASE  (0x2000C000)  /* Secure SRAM base */
+#define S_RAM_ALIAS_BASE  (0x2000B020)  /* Secure SRAM base */
 
 #if !defined(TFM_NS_REG_TEST) && !defined(TFM_S_REG_TEST)
-#define NS_RAM_ALIAS_BASE (0x20016020)  /* Non-Secure SRAM base */
+#define NS_RAM_ALIAS_BASE (0x20037020)  /* Non-Secure SRAM base */
 #else
-#define NS_RAM_ALIAS_BASE (0x2002a020)  /* Non-Secure SRAM base */
+#define NS_RAM_ALIAS_BASE (0x2004c020)  /* Non-Secure SRAM base */
 #endif
 
 /* KM4TZ MSP_S RAM: 2.5k */
-#define KM4TZ_MSP_RAM_S_ADDR  (0x30000600)
-#define KM4TZ_MSP_RAM_S_SIZE  (0x30001000 - 0x30000600)
+#define KM4TZ_MSP_RAM_S_ADDR  (0x30009000)
+#define KM4TZ_MSP_RAM_S_SIZE  (4096)
+
+/* KM4TZ IMG2_ENTRY */
+#define KM4_IMG2_ENTRY  (0x20004DA0)
+#define KM4_IMG2_ENTRY_SIZE  (0x20)
+
+/* NS image logic base addresses (used by startup_bl2.c) */
+#define NS_AP_LOGIC_BASE (0x0E000000) /* km4 app logic address */
+#define NS_NP_LOGIC_BASE (0x0C000000) /* km0 np logic address */
 
 #define TOTAL_ROM_SIZE FLASH_TOTAL_SIZE
-#define TOTAL_RAM_SIZE (0x20068000 - 0x20007000)     /* S+NS SRAM */
-
-#define NS_AP_LOGIC_BASE (0x04000000)
-#define NS_NP_LOGIC_BASE (0x02000000)
+#define TOTAL_RAM_SIZE (0x20068000 - S_RAM_ALIAS_BASE)     /* S + NS SRAM */
 
 #endif /* __FLASH_LAYOUT_H__ */

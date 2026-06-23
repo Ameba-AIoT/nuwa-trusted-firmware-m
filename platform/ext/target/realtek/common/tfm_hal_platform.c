@@ -87,32 +87,62 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_platform_init(void)
 #if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
 uint32_t tfm_hal_get_ns_VTOR(void)
 {
-	// return memory_regions.non_secure_code_start;
+#if defined(CONFIG_AMEBADPLUS) && defined(BL2)
+	/* mcuboot BL2 does not run amebadplus stock BOOT_NsStart, so
+	 * SCB_NS->VTOR is not yet set. Return the NS image vector table
+	 * base (RSIP-mapped just after the mcuboot 0x400 header). */
+	return (uint32_t)(NS_AP_LOGIC_BASE + 0x400);
+#else
 	return SCB_NS->VTOR; // Already Done in Bootloader
+#endif
 }
 
 uint32_t tfm_hal_get_ns_MSP(void)
 {
 	// return *((uint32_t *)memory_regions.non_secure_code_start);
+#ifdef CONFIG_AMEBADPLUS
+#ifdef BL2
+	return *((uint32_t *)(NS_AP_LOGIC_BASE + 0x400));
+#else
+	return __TZ_get_MSP_NS();
+#endif
+#else
 #ifdef BL2
 	return *((uint32_t *)(NS_AP_LOGIC_BASE + BL2_HEADER_SIZE));
 #else
 	return __TZ_get_MSP_NS(); // Already Done in Bootloader
+#endif
 #endif
 }
 #endif
 
 uint32_t tfm_hal_get_ns_entry_point(void)
 {
-	/*NOTE: memory_regions.non_secure_code_start is calculated by:
-	 *      NS_ROM_ALIAS_BASE + (FLASH_AREA_BL2_SIZE + FLASH_S_PARTITION_SIZE + BL2_HEADER_SIZE)
+	// return *((uint32_t *)(memory_regions.non_secure_code_start + 4));
+#ifdef CONFIG_AMEBADPLUS
+#ifdef BL2
+	/*
+	 * mcuboot/BL2 path: NS image is RSIP-mapped at NS_AP_LOGIC_BASE.
+	 * RSIP MMU_ID2 skips both the mcuboot header and the KM0 sub-image,
+	 * so 0x0E000400 is the first instruction byte of the NS image
+	 * vector table. Reset_Handler is vector_table[1].
+	 *
+	 * Note: the NS app must be linked with the absolute slot0_partition
+	 * address (CONFIG_USE_DT_CODE_PARTITION=y), otherwise the vector
+	 * table holds image-relative offsets and the jump goes to ROM.
 	 */
-	/* return *((uint32_t *)(memory_regions.non_secure_code_start + 4)); */
+	return *((uint32_t *)(NS_AP_LOGIC_BASE + 0x400 + 4));
+#else
+	PRAM_START_FUNCTION Image2EntryFun = (PRAM_START_FUNCTION)__image2_entry_func_entry__;
+	return (uint32_t)Image2EntryFun->RamStartFun;
+#endif
+#else
 #ifdef BL2
 	return *((uint32_t *)(NS_AP_LOGIC_BASE + BL2_HEADER_SIZE + 4));
 #else
 	PRAM_START_FUNCTION Image2EntryFun = (PRAM_START_FUNCTION)__image2_entry_func__;
 	return (uint32_t)Image2EntryFun->RamStartFun;
+#endif
 #endif
 }
 

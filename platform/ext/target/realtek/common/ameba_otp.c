@@ -7,6 +7,7 @@
 #include <ameba_soc.h>
 
 #include "tfm_plat_otp.h"
+#include <stdio.h>
 #include <string.h>
 
 #define _CONCAT(a, b) a##b
@@ -69,70 +70,17 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 
 	switch (id) {
 	case PLAT_OTP_ID_HUK:
-		/*TODO: read from efuse */
-		memset(out, 0, MIN(out_len, 32));
+		/*TODO: */
+		memset(out, 0, out_len);
 		break;
-#ifdef TFM_DUMMY_PROVISIONING
-	case PLAT_OTP_ID_IAK: {
-		/* P-256 test private key matching TFM_DUMMY_PROVISIONING in provisioning.c */
-		static const uint8_t dummy_iak[32] = {
-			0xA9, 0xB4, 0x54, 0xB2, 0x6D, 0x6F, 0x90, 0xA4,
-			0xEA, 0x31, 0x19, 0x35, 0x64, 0xCB, 0xA9, 0x1F,
-			0xEC, 0x6F, 0x9A, 0x00, 0x2A, 0x7D, 0xC0, 0x50,
-			0x4B, 0x92, 0xA1, 0x93, 0x71, 0x34, 0x58, 0x5F,
-		};
-		memcpy(out, dummy_iak, MIN(out_len, sizeof(dummy_iak)));
+	case PLAT_OTP_ID_IAK:
+		/*TODO: */
+		memset(out, 0, out_len);
 		break;
-	}
-	case PLAT_OTP_ID_IAK_LEN: {
-		size_t iak_len = 32; /* P-256 private key = 32 bytes */
-		memcpy(out, &iak_len, MIN(out_len, sizeof(iak_len)));
+	case PLAT_OTP_ID_ENTROPY_SEED:
+		/*TODO: */
+		memset(out, 0, out_len);
 		break;
-	}
-	case PLAT_OTP_ID_IAK_TYPE: {
-		/* PSA_ECC_FAMILY_SECP_R1 = 0x12; store as uint32_t to match get_size */
-		uint32_t iak_type = 0x12;
-		memcpy(out, &iak_type, MIN(out_len, sizeof(iak_type)));
-		break;
-	}
-	case PLAT_OTP_ID_BOOT_SEED: {
-		/* Test boot seed matching TFM_DUMMY_PROVISIONING */
-		static const uint8_t dummy_boot_seed[32] = {
-			0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
-			0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF,
-			0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7,
-			0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF,
-		};
-		memcpy(out, dummy_boot_seed, MIN(out_len, sizeof(dummy_boot_seed)));
-		break;
-	}
-	case PLAT_OTP_ID_IMPLEMENTATION_ID: {
-		/* Test implementation ID matching TFM_DUMMY_PROVISIONING */
-		static const uint8_t dummy_impl_id[32] = {
-			0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-			0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
-			0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-			0xDD, 0xDD, 0xDD, 0xDD, 0xDD, 0xDD, 0xDD, 0xDD,
-		};
-		memcpy(out, dummy_impl_id, MIN(out_len, sizeof(dummy_impl_id)));
-		break;
-	}
-	case PLAT_OTP_ID_ENTROPY_SEED: {
-		/* Test entropy seed matching TFM_DUMMY_PROVISIONING */
-		static const uint8_t dummy_entropy_seed[64] = {
-			0x12, 0x13, 0x23, 0x34, 0x0a, 0x05, 0x89, 0x78,
-			0xa3, 0x66, 0x8c, 0x0d, 0x97, 0x55, 0x53, 0xca,
-			0xb5, 0x76, 0x18, 0x62, 0x29, 0xc6, 0xb6, 0x79,
-			0x75, 0xc8, 0x5a, 0x8d, 0x9e, 0x11, 0x8f, 0x85,
-			0xde, 0xc4, 0x5f, 0x66, 0x21, 0x52, 0xf9, 0x39,
-			0xd9, 0x77, 0x93, 0x28, 0xb0, 0x5e, 0x02, 0xfa,
-			0x58, 0xb4, 0x16, 0xc8, 0x0f, 0x38, 0x91, 0xbb,
-			0x28, 0x17, 0xcd, 0x8a, 0xc9, 0x53, 0x72, 0x66,
-		};
-		memcpy(out, dummy_entropy_seed, MIN(out_len, sizeof(dummy_entropy_seed)));
-		break;
-	}
-#endif /* TFM_DUMMY_PROVISIONING */
 #ifdef MCUBOOT_BUILTIN_KEY
 	case PLAT_OTP_ID_BL2_ROTPK_0:
 		/* For secure image, corresponding to CONFIG_TFM_KEY_FILE_S*/
@@ -150,36 +98,13 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 		break;
 #endif
 	case PLAT_OTP_ID_LCS: {
-		/* Hardcode SECURED to bypass provisioning state machine */
+		/*TODO: */
 		enum plat_otp_lcs_t lcs = PLAT_OTP_LCS_SECURED;
-		memcpy(out, (uint8_t *)&lcs, MIN(out_len, sizeof(lcs)));
+		memcpy(out, (uint8_t *)&lcs, out_len);
 		break;
 	}
-#ifdef TFM_DUMMY_PROVISIONING
-	case PLAT_OTP_ID_PROFILE_DEFINITION: {
-		/* PSA IoT Profile 1 matching TFM_DUMMY_PROVISIONING / ATTEST_TOKEN_PROFILE_PSA_IOT_1 */
-		static const char profile_def[] = "PSA_IOT_PROFILE_1";
-		size_t copy = MIN(out_len, sizeof(profile_def));
-		memcpy(out, profile_def, copy);
-		break;
-	}
-	case PLAT_OTP_ID_VERIFICATION_SERVICE_URL: {
-		/* Verification service URL matching TFM_DUMMY_PROVISIONING */
-		static const char service_url[] = "www.trustedfirmware.org";
-		size_t copy = MIN(out_len, sizeof(service_url));
-		memcpy(out, service_url, copy);
-		break;
-	}
-	case PLAT_OTP_ID_CERT_REF: {
-		/* Certification reference matching TFM_DUMMY_PROVISIONING */
-		static const char cert_ref[] = "0604565272829-10010";
-		size_t copy = MIN(out_len, sizeof(cert_ref));
-		memcpy(out, cert_ref, copy);
-		break;
-	}
-#endif /* TFM_DUMMY_PROVISIONING */
 	default:
-		printf("tfm_plat_otp_read: unsupport id: %d, len: %u\n", id, out_len);
+		DiagPrintf("tfm_plat_otp_read: unsupport id: %d, len: %u\n", id, out_len);
 		return TFM_PLAT_ERR_UNSUPPORTED;
 		break;
 	}
@@ -259,21 +184,6 @@ enum tfm_plat_err_t tfm_plat_otp_get_size(enum tfm_otp_element_id_t id,
 #endif
 	case PLAT_OTP_ID_LCS:
 		*size = sizeof(enum plat_otp_lcs_t);
-		break;
-	case PLAT_OTP_ID_BOOT_SEED:
-		*size = 32;
-		break;
-	case PLAT_OTP_ID_IMPLEMENTATION_ID:
-		*size = 32;
-		break;
-	case PLAT_OTP_ID_PROFILE_DEFINITION:
-		*size = sizeof("PSA_IOT_PROFILE_1"); /* 18: 17 chars + null */
-		break;
-	case PLAT_OTP_ID_VERIFICATION_SERVICE_URL:
-		*size = sizeof("www.trustedfirmware.org"); /* 24: 23 chars + null */
-		break;
-	case PLAT_OTP_ID_CERT_REF:
-		*size = sizeof("0604565272829-10010"); /* 20: 19 chars + null */
 		break;
 	default:
 		return TFM_PLAT_ERR_UNSUPPORTED;

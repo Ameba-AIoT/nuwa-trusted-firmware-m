@@ -10,7 +10,7 @@ set(CMAKE_CURRENT_SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 
 # Add hal_realtek in build system
-set(TARGET_SOC "amebag2" CACHE STRING "The target Realtek SOC (e.g., amebag2, amebadplus)")
+set(TARGET_SOC "amebadplus" CACHE STRING "The target Realtek SOC (e.g., amebag2, amebadplus)")
 include(../common/hal_realtek.cmake)
 
 #========================= Platform region defs ===============================#
@@ -31,7 +31,7 @@ target_link_libraries(platform_region_defs
 # Specify the location of platform specific build dependencies.
 target_sources(tfm_s
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/cmsis_core/startup_amebag2.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmsis_core/startup_amebadplus.c
         ${CMAKE_CURRENT_SOURCE_DIR}/cmsis_core/system_core_init.c
 )
 
@@ -77,7 +77,10 @@ target_include_directories(platform_s
         ${HAL_REALTEK_COMMON_DIR}/include
         ${HAL_REALTEK_OS_WRAPPER_DIR}/include
         ${HAL_REALTEK_SOC_DIR}/fwlib/include
-        ${HAL_REALTEK_SOC_DIR}/fwlib/include/rom
+        ${HAL_REALTEK_SOC_DIR}/swlib
+        ${HAL_REALTEK_SOC_DIR}/app/monitor/include/
+        ${HAL_REALTEK_SOC_DIR}/misc
+        ${HAL_REALTEK_SOC_DIR}/lib/include
         ${HAL_REALTEK_USRCFG_DIR}/include
         ${HAL_REALTEK_USRCFG_DIR}/../common
         ${PLATFORM_DIR}/ext/target/arm/drivers/mpu/armv8m
@@ -91,6 +94,8 @@ target_sources(platform_s
         ../common/cmsis_drivers/Driver_Flash.c
         ${PLATFORM_DIR}/ext/target/arm/drivers/mpu/armv8m/mpu_armv8m_drv.c
         ${HAL_REALTEK_SOC_DIR}/fwlib/ram_common/ameba_flash_ram.c
+        ${HAL_REALTEK_SOC_DIR}/swlib/log.c
+        # ${HAL_REALTEK_SOC_DIR}/lib/chipinfo/ameba_rom_patch.c
         # $<$<AND:$<NOT:$<BOOL:${TFM_PARTITION_SLIH_TEST}>>,$<NOT:$<BOOL:${TFM_PARTITION_FLIH_TEST}>>>:${CMAKE_CURRENT_SOURCE_DIR}/native_drivers/timer_cmsdk/timer_cmsdk.c>
         # $<$<OR:$<BOOL:${TFM_S_REG_TEST}>,$<BOOL:${TFM_NS_REG_TEST}>>:${CMAKE_CURRENT_SOURCE_DIR}/plat_test.c>
         $<$<BOOL:${TFM_PARTITION_PLATFORM}>:${CMAKE_CURRENT_SOURCE_DIR}/../common/services/src/tfm_platform_system.c>
@@ -98,10 +103,6 @@ target_sources(platform_s
         $<$<NOT:$<BOOL:${PLATFORM_DEFAULT_OTP}>>:${AUTO_GEN_NONSECURE_PUB_C}>
         $<$<NOT:$<BOOL:${PLATFORM_DEFAULT_OTP}>>:${AUTO_GEN_SECURE_PUB_C}>
 )
-
-if(NOT PLATFORM_DEFAULT_OTP)
-    add_dependencies(platform_s gen_pub_key_c)
-endif()
 
 target_sources(tfm_sprt
     PRIVATE
@@ -128,13 +129,13 @@ target_compile_definitions(platform_s
 target_compile_definitions(platform_region_defs
     INTERFACE
         $<$<BOOL:${TFM_S_REG_TEST}>:TFM_S_REG_TEST=1>
-        HAL_REALTEK_TFM_XIP=1
 )
 
-# Add ROM symbol linker script for Realtek AmebaG2
+# Add ROM symbol linker script for Realtek Amebadplus
 target_link_libraries(platform_s
     PUBLIC
-        -T${HAL_REALTEK_PRJ_DIR}/ld/ameba_rom_symbol_bcut_s.ld
+        -T${HAL_REALTEK_PRJ_DIR}/ld/ameba_rom_symbol_acut_s.ld
+        ${HAL_REALTEK_LIB_DIR}/lib_chipinfo.a
 )
 
 if (TFM_PARTITION_CRYPTO)
@@ -161,8 +162,13 @@ if(BL2)
         PUBLIC
             .
             ../common
+            cmsis_core
+            partition
             ${HAL_REALTEK_SOC_DIR}/fwlib/include
-            ${HAL_REALTEK_SOC_DIR}/fwlib/include/rom
+            ${HAL_REALTEK_SOC_DIR}/swlib
+            ${HAL_REALTEK_SOC_DIR}/app/monitor/include
+            ${HAL_REALTEK_SOC_DIR}/misc
+            ${HAL_REALTEK_SOC_DIR}/lib/include
             ${HAL_REALTEK_SOC_DIR}/../include
             ${HAL_REALTEK_COMMON_DIR}/include
             ${HAL_REALTEK_USRCFG_DIR}/include
@@ -188,12 +194,18 @@ if(BL2)
         PUBLIC
             .
             ../common
+            cmsis_core
+            partition
             ${HAL_REALTEK_SOC_DIR}/fwlib/include
+            ${HAL_REALTEK_SOC_DIR}/swlib
+            ${HAL_REALTEK_SOC_DIR}/app/monitor/include
+            ${HAL_REALTEK_SOC_DIR}/misc
+            ${HAL_REALTEK_SOC_DIR}/lib/include
             ${HAL_REALTEK_SOC_DIR}/loader/bootloader
             ${HAL_REALTEK_SOC_DIR}/loader/mcuboot
-            # ${HAL_REALTEK_SOC_DIR}/fwlib/include/rom
             ${HAL_REALTEK_SOC_DIR}/../include
             ${HAL_REALTEK_COMMON_DIR}/include
+            ${HAL_REALTEK_COMMON_DIR}/crashdump/include
             ${HAL_REALTEK_USRCFG_DIR}/include
             ${HAL_REALTEK_USRCFG_DIR}/../common
             ${HAL_REALTEK_OS_WRAPPER_DIR}/include
@@ -211,16 +223,18 @@ if(BL2)
             ${AUTO_GEN_SECURE_PUB_C}
             ${AUTO_GEN_NONSECURE_PUB_C}
 
-            ${HAL_REALTEK_SOC_DIR}/loader/bootloader/bootloader_km4tz.c
-            ${HAL_REALTEK_SOC_DIR}/loader/bootloader/bootloader_clk.c
-            ${HAL_REALTEK_SOC_DIR}/loader/bootloader/boot_ota_km4tz.c
+            ${HAL_REALTEK_SOC_DIR}/loader/bootloader/bootloader_km4.c
+            ${HAL_REALTEK_SOC_DIR}/loader/bootloader/boot_ota_km4.c
+            ${HAL_REALTEK_SOC_DIR}/loader/bootloader/boot_security_km4.c
             ${HAL_REALTEK_SOC_DIR}/fwlib/ram_common/ameba_psram.c
             ${HAL_REALTEK_SOC_DIR}/fwlib/ram_common/ameba_ldo.c
             ${HAL_REALTEK_SOC_DIR}/fwlib/ram_common/ameba_pll.c
             ${HAL_REALTEK_SOC_DIR}/fwlib/ram_common/ameba_clk.c
             ${HAL_REALTEK_SOC_DIR}/fwlib/ram_common/ameba_reset.c
             ${HAL_REALTEK_SOC_DIR}/fwlib/ram_common/ameba_flash_ram.c
-            ${HAL_REALTEK_SOC_DIR}/fwlib/ram_km4tz/ameba_flashclk.c
+            ${HAL_REALTEK_SOC_DIR}/fwlib/ram_common/ameba_fault_handle.c
+            ${HAL_REALTEK_SOC_DIR}/fwlib/ram_km4/ameba_flashclk.c
+            ${HAL_REALTEK_SOC_DIR}/swlib/log.c
 
             ${HAL_REALTEK_USRCFG_DIR}/ameba_bootcfg.c
             ${HAL_REALTEK_USRCFG_DIR}/ameba_flashcfg.c
@@ -231,17 +245,13 @@ if(BL2)
 
     target_link_libraries(bl2
         PUBLIC
-            -T${HAL_REALTEK_PRJ_DIR}/ld/ameba_rom_symbol_bcut_s.ld
+            -T${HAL_REALTEK_PRJ_DIR}/ld/ameba_rom_symbol_acut_s.ld
             ${HAL_REALTEK_LIB_DIR}/lib_chipinfo.a
             ${HAL_REALTEK_LIB_DIR}/lib_bootloader.a
     )
     target_add_scatter_file(bl2
             $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_SOURCE_DIR}/ld/tfm_common_bl2.ld>
     )
-    #NOTE: Apply CMSE flags when preprocessing the BL2 scatter script so that
-    # __ARM_FEATURE_CMSE and relative symbols (e.g. __StackSeal) are defined.
-    # These flags must be set on bl2_scatter (the linker-script preprocessor target);
-    # adding them only to bl2 would not affect this preprocessing step
     target_compile_options(bl2_scatter
         PUBLIC
             ${COMPILER_CMSE_FLAG}
@@ -309,57 +319,55 @@ install(DIRECTORY   partition
 
 set(IMAGES_DIR  ${CMAKE_BINARY_DIR}/../images)
 set(BIN_DIR     ${CMAKE_BINARY_DIR}/bin)
+
 if(BL2)
-    # Auto-generate disassembly file after bl2.axf is built
     file(MAKE_DIRECTORY ${BIN_DIR})
     file(MAKE_DIRECTORY ${IMAGES_DIR})
     if(NOT EXISTS ${BIN_DIR}/ram_1.bin)
         file(TOUCH ${BIN_DIR}/ram_1.bin)
     endif()
-    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/amebagreen2_gcc_project)
-    file(COPY ${HAL_REALTEK_PRJ_DIR}/manifest.json5 DESTINATION ${CMAKE_BINARY_DIR}/amebagreen2_gcc_project/)
-    file(COPY ${HAL_REALTEK_PRJ_DIR}/ameba_layout.ld DESTINATION ${CMAKE_BINARY_DIR}/amebagreen2_gcc_project/)
+    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/amebadplus_gcc_project)
+    file(COPY ${HAL_REALTEK_PRJ_DIR}/manifest.json5 DESTINATION ${CMAKE_BINARY_DIR}/amebadplus_gcc_project/)
+    file(COPY ${HAL_REALTEK_PRJ_DIR}/ameba_layout.ld DESTINATION ${CMAKE_BINARY_DIR}/amebadplus_gcc_project/)
     add_custom_command(
         OUTPUT ${IMAGES_DIR}/${TARGET_SOC}_boot.bin
         BYPRODUCTS
             ${BIN_DIR}/bl2.raw.map
+            ${BIN_DIR}/ram_1.bin
             ${BIN_DIR}/boot.bin
             ${BIN_DIR}/${TARGET_SOC}_boot.bin
         DEPENDS
             bl2 platform_bl2 platform_s
             ${BIN_DIR}/bl2.axf
             ${BIN_DIR}/bl2.bin
-            ${BIN_DIR}/ram_1.bin
             ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py
         COMMAND ${CMAKE_NM} ${BIN_DIR}/bl2.axf | sort > ${BIN_DIR}/bl2.raw.map
         COMMAND ${CMAKE_OBJDUMP} -d ${BIN_DIR}/bl2.axf > ${BIN_DIR}/bl2.asm
+        # Extract .ram_image1.entry section (RamStartTable + ROM_IMG1_VALID_PATTEN for ROM check at 0x3000a020)
+        COMMAND ${CMAKE_OBJCOPY} -j .ram_image1.entry -Obinary ${BIN_DIR}/bl2.axf ${BIN_DIR}/ram_1.bin
         COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
                 -i ${BIN_DIR}/bl2.bin
-                -o ${BIN_DIR}/xip_boot.bin  # prepend_header need this name
+                -o ${BIN_DIR}/xip_boot.bin
                 -l 32
         COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
                 -o ${BIN_DIR}/xip_boot_prepend.bin
                 -i ${BIN_DIR}/xip_boot.bin
-                -s __km4tz_boot_text_start__ -m ${BIN_DIR}/bl2.raw.map
+                -s __km4_boot_text_start__ -m ${BIN_DIR}/bl2.raw.map
                 --boot-index 0x01010101
         COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
                 -o ${BIN_DIR}/ram_1_prepend.bin
                 -i ${BIN_DIR}/ram_1.bin
-                -s __km4tz_boot_text_start__ -m ${BIN_DIR}/bl2.raw.map
+                -s __ram_image1_text_start__ -m ${BIN_DIR}/bl2.raw.map
         COMMAND ${CMAKE_COMMAND} -E cat ${BIN_DIR}/xip_boot_prepend.bin ${BIN_DIR}/ram_1_prepend.bin
                 > ${BIN_DIR}/boot.bin
         COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py
-                --post-build-dir ${CMAKE_BINARY_DIR}/amebagreen2_gcc_project
+                --post-build-dir ${CMAKE_BINARY_DIR}/amebadplus_gcc_project
                 fw_pack
                 -o ${BIN_DIR}/${TARGET_SOC}_boot.bin
                 --image1 ${BIN_DIR}/boot.bin
         COMMAND ${CMAKE_COMMAND} -E copy ${BIN_DIR}/${TARGET_SOC}_boot.bin ${IMAGES_DIR}/
-        # Also copy as boot.bin: the Zephyr flashing tool (nuwa.py flash) locates
-        # the boot image by this generic name regardless of SOC prefix.
-        COMMAND ${CMAKE_COMMAND} -E copy ${BIN_DIR}/${TARGET_SOC}_boot.bin ${IMAGES_DIR}/boot.bin
 
         COMMENT "Process bl2 image"
-        # VERBATIM ensures that '$$' in symbol names are passed literally to the command without shell escaping
         VERBATIM
     )
 
@@ -370,10 +378,13 @@ if(BL2)
     add_custom_command(
         OUTPUT ${BIN_DIR}/tfm_s.asm ${IMAGES_DIR}/tfm_s_signed.bin
         # NOTE: file paths (not just target names) are required as DEPENDS for
-        # ninja to re-fire this rule on incremental builds. Target-name-only
-        # DEPENDS are emitted as ninja "order-only" deps and do NOT trigger
-        # re-runs when those targets' outputs change. See rtl872xda_evb's
-        # CMakeLists.txt for the full explanation.
+        # ninja to re-fire this rule on incremental builds. If only target
+        # names like `tfm_s_signed_bin` / `platform_s` are used, CMake emits
+        # them as ninja "order-only" deps (after `||`), which only enforce
+        # build ordering -- they do NOT trigger re-runs when those targets'
+        # outputs change. Without `${BIN_DIR}/tfm_s.axf` as an explicit file
+        # dep here, edits in secure_fw/ that update tfm_s.axf but don't
+        # update libplatform_s.a leave images/tfm_s_signed.bin stale.
         DEPENDS tfm_s_signed_bin platform_s
                 ${BIN_DIR}/tfm_s.axf
         BYPRODUCTS
@@ -385,43 +396,41 @@ if(BL2)
         COMMAND ${CMAKE_STRIP} ${BIN_DIR}/target_pure_tfm.axf
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE_DIR:bl2>/tfm_s_signed.bin ${IMAGES_DIR}/
         COMMENT "Post process tfm_s target ${CMAKE_BINARY_DIR}"
-        # VERBATIM ensures that '$$' in symbol names are passed literally to the command without shell escaping
         VERBATIM
     )
 else()
-    # Auto-generate disassembly file after tfm_s.axf is built
+    # Auto-generate disassembly file and km4_image3_all.bin after tfm_s.axf is built
     add_custom_command(
-        OUTPUT ${BIN_DIR}/tfm_s.asm ${BIN_DIR}/km4tz_image3_all.bin
+        OUTPUT ${BIN_DIR}/tfm_s.asm ${BIN_DIR}/km4_image3_all.bin
         DEPENDS tfm_s
         COMMAND ${CMAKE_NM} ${BIN_DIR}/tfm_s.axf | sort > ${BIN_DIR}/tfm_s.raw.map
         COMMAND ${CMAKE_OBJDUMP} -d ${BIN_DIR}/tfm_s.axf > ${BIN_DIR}/tfm_s.asm
         COMMAND ${CMAKE_COMMAND} -E copy ${BIN_DIR}/tfm_s.axf ${BIN_DIR}/target_pure_tfm.axf
         COMMAND ${CMAKE_STRIP} ${BIN_DIR}/target_pure_tfm.axf
-        COMMAND ${CMAKE_OBJCOPY} -j .TFM_VECTORS
-                -Obinary ${BIN_DIR}/target_pure_tfm.axf ${BIN_DIR}/ram_3_s.bin
-        COMMAND ${CMAKE_COMMAND} -E copy ${BIN_DIR}/tfm_s.bin ${BIN_DIR}/xip_3_s.bin
-        COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
-                -i ${BIN_DIR}/ram_3_s.bin -l 32
+
+        COMMAND ${CMAKE_COMMAND} -E echo "" > ${BIN_DIR}/xip_3_s.bin
+        COMMAND ${CMAKE_OBJCOPY} -Obinary ${BIN_DIR}/target_pure_tfm.axf ${BIN_DIR}/ram_3_s.bin
+
         COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
                 -i ${BIN_DIR}/xip_3_s.bin -l 32
+        COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
+                -i ${BIN_DIR}/ram_3_s.bin -l 32
 
+        COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+                -o ${BIN_DIR}/xip_3_s_prepend.bin
+                -i ${BIN_DIR}/xip_3_s.bin
+                -s __vectors_start__ -m ${BIN_DIR}/tfm_s.raw.map
         COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
                 -o ${BIN_DIR}/ram_3_s_prepend.bin
                 -i ${BIN_DIR}/ram_3_s.bin
                 -s __vectors_start__ -m ${BIN_DIR}/tfm_s.raw.map
-        COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
-                -o ${BIN_DIR}/xip_3_s_prepend.bin
-                -i ${BIN_DIR}/xip_3_s.bin
-                -s Image$$PT_RO_START$$Base -m ${BIN_DIR}/tfm_s.raw.map
 
         COMMAND ${CMAKE_COMMAND} -E cat ${BIN_DIR}/xip_3_s_prepend.bin ${BIN_DIR}/ram_3_s_prepend.bin
-                > ${BIN_DIR}/km4tz_image3_all.bin
+                > ${BIN_DIR}/km4_image3_all.bin
         COMMENT "Generating tfm_s.asm disassembly file"
-        # VERBATIM ensures that '$$' in symbol names are passed literally to the command without shell escaping
         VERBATIM
     )
 endif()
-
 
 add_custom_target(tfm_s_asm ALL
     DEPENDS ${BIN_DIR}/tfm_s.asm

@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Startup code for RTL8721F (AmebaG2) TF-M platform
+ * Startup code for RTL8721Dx (Amebadplus) TF-M platform
  */
 
 #include "tfm_hal_device_header.h"
@@ -26,12 +26,15 @@ extern __NO_RETURN void __PROGRAM_START(void);
 __NO_RETURN void Reset_Handler (void);
 
 #ifdef BL2
+/* BL2 needs a proper ARM Cortex-M vector table:
+ * [0] = Initial MSP value
+ * [1] = Reset_Handler address
+ * bl2_main.c reads vt->reset from index [1]; without this,
+ * TFMEntryFun[1]=NULL causes vt->reset=0 and boot fails. */
 typedef void (*VECTOR_TABLE_Type)(void);
 const VECTOR_TABLE_Type __VECTOR_TABLE[] __VECTOR_TABLE_ATTRIBUTE = {
-  (VECTOR_TABLE_Type)(&__INITIAL_SP),     /*      Initial Stack Pointer */
-/* Exceptions */
+    (VECTOR_TABLE_Type)(&__INITIAL_SP),
     Reset_Handler,
-    /*REVIEW: need more? */
 };
 #else
 RAM_START_FUNCTION TFMEntryFun __VECTOR_TABLE_ATTRIBUTE = {
@@ -41,9 +44,6 @@ RAM_START_FUNCTION TFMEntryFun __VECTOR_TABLE_ATTRIBUTE = {
 };
 #endif
 
-#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 1U)
-HAL_VECTOR_FUN RamVectorTable[95] __attribute__((aligned(512), section(".ramvectortable")));
-#endif
 /*----------------------------------------------------------------------------
   Reset Handler called on controller reset
  *----------------------------------------------------------------------------*/
@@ -77,27 +77,33 @@ void Reset_Handler(void)
 
     /* __NVIC_SetVector(SVCall_IRQn, (uint32_t)SVC_Handler); */
     /* __NVIC_SetVector(PendSV_IRQn, (uint32_t)PendSV_Handler); */
-	SVCall_irqfunc_set(SVC_Handler);
-	PendSV_irqfunc_set(PendSV_Handler);
+	NewVectorTable[11] = (HAL_VECTOR_FUN)SVC_Handler;
+	NewVectorTable[14] = (HAL_VECTOR_FUN)PendSV_Handler;
+
+	/* Ensure VTOR_S points to the ROM-managed secure vector table at
+	 * NewVectorTable (0x30007000). BL2 (loaded from RSIP-mapped flash) may
+	 * have left VTOR_S elsewhere, in which case the SVC_Handler/PendSV_Handler
+	 * we just wrote into NewVectorTable would never get invoked. */
+	__DSB();
+	SCB->VTOR = (uint32_t)NewVectorTable;
+	__DSB();
+	__ISB();
+
+	/* Reset_Handler started with cpsid i (PRIMASK_S=1). With PRIMASK set,
+	 * SVC instructions escalate to HardFault instead of invoking SVCall.
+	 * TFM uses SVC for BACKEND_SPM_INIT and other syscalls, so re-enable
+	 * IRQs before main runs. */
+	__enable_irq();
 #else
     extern void SysTick_Handler (void);
 
-    SCB->VTOR = (u32)RomVectorTable;
-
-    uint32_t *pSrc  = (uint32_t *)RomVectorTable;
-    uint32_t *pDest = (uint32_t *)RamVectorTable;
-    uint32_t count  = sizeof(RamVectorTable) / sizeof(uint32_t);
-
-    for (uint32_t i = 0; i < count; i++) {
-        pDest[i] = pSrc[i];
-    }
-    RamVectorTable[0]  = (HAL_VECTOR_FUN)MSP_RAM_HP_NS;
-    RamVectorTable[11] = SVC_Handler;
-    RamVectorTable[14] = PendSV_Handler;
-    RamVectorTable[15] = SysTick_Handler;
+    NewVectorTable[0]  = (HAL_VECTOR_FUN)MSP_RAM_HP_NS;
+    NewVectorTable[11] = SVC_Handler;
+    NewVectorTable[14] = PendSV_Handler;
+    NewVectorTable[15] = SysTick_Handler;
 
     __DSB();
-    SCB->VTOR = (uint32_t)RamVectorTable;
+    SCB->VTOR = (uint32_t)NewVectorTable;
     __DSB();
     __ISB();
 #endif

@@ -98,16 +98,6 @@ static const struct mpu_armv8m_region_cfg_t region_cfg[] = {
 	{
 		0, /* will be updated before using */
 		(uint32_t) &REGION_NAME(Image$$, TFM_UNPRIV_CODE_START, $$Base),
-		(uint32_t) &REGION_NAME(Image$$, TFM_UNPRIV_CODE_END, $$Limit) - 1,
-		MPU_ARMV8M_MAIR_ATTR_CODE_IDX,
-		MPU_ARMV8M_XN_EXEC_OK,
-		MPU_ARMV8M_AP_RO_PRIV_UNPRIV,
-		MPU_ARMV8M_SH_NONE
-	},
-	/* RO region */
-	{
-		0, /* will be updated before using */
-		(uint32_t) &REGION_NAME(Image$$, TFM_APP_CODE_START, $$Base),
 		(uint32_t) &REGION_NAME(Image$$, TFM_APP_CODE_END, $$Base) - 1,
 		MPU_ARMV8M_MAIR_ATTR_CODE_IDX,
 		MPU_ARMV8M_XN_EXEC_OK,
@@ -286,6 +276,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_set_up_static_boundaries(
 		memcpy(&localcfg, &region_cfg[i], sizeof(localcfg));
 		/* Update region number */
 		localcfg.region_nr = i;
+
 		/* Enable regions */
 		FIH_CALL(mpu_armv8m_region_enable, fih_rc, &dev_mpu_s, &localcfg);
 		if (fih_not_eq(fih_rc, fih_int_encode(MPU_ARMV8M_OK))) {

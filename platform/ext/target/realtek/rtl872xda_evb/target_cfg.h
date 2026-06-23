@@ -25,6 +25,9 @@
 #define TFM_DRIVER_STDIO    Driver_USART0
 #define NS_DRIVER_STDIO     Driver_USART0
 
+extern u8 __image2_entry_func_entry__[];
+extern u8 __image2_entry_func_entry_end__[];
+
 /**
  * \brief Defines the word offsets of Slave Peripheral Protection Controller
  *        Registers

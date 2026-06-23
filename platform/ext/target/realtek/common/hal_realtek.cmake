@@ -6,7 +6,12 @@
 #-------------------------------------------------------------------------------
 
 cmake_policy(SET CMP0076 NEW)
-set(CMAKE_CURRENT_SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR})
+
+if(NOT DEFINED TARGET_SOC OR "${TARGET_SOC}" STREQUAL "")
+    message(FATAL_ERROR "TARGET_SOC is missing or empty! "
+                        "Please set TARGET_SOC (e.g., set(TARGET_SOC \"amebag2\")) "
+                        "before including hal_realtek.cmake")
+endif()
 
 ###### CMake-generic extensions ################################################
 function(add_subdirectory_ifdef feature_toggle source_dir)
@@ -29,8 +34,6 @@ fetch_remote_library(
 )
 
 set(HAL_REALTEK_PATH            ${HAL_REALTEK_PATH}  CACHE PATH "")
-
-set(TARGET_SOC "amebag2"  CACHE STRING "")
 
 set(HAL_REALTEK_SOC_DIR          ${HAL_REALTEK_PATH}/ameba/${TARGET_SOC}/source CACHE PATH   "")
 set(HAL_REALTEK_PRJ_DIR          ${HAL_REALTEK_PATH}/ameba/${TARGET_SOC} CACHE PATH   "")

@@ -21,13 +21,13 @@
 #include "tfm_plat_defs.h"
 #include "region.h"
 
+extern uint32_t __vectors_start__[];
+
 #ifdef PSA_API_TEST_IPC
 #define PSA_FF_TEST_SECURE_UART2
 #endif
 
 #define ARRAY_SIZE(arr) (sizeof(arr)/sizeof(arr[0]))
-
-extern uint32_t __vectors_start__[];
 
 struct platform_data_t tfm_peripheral_std_uart = {};
 
@@ -35,8 +35,6 @@ struct platform_data_t tfm_peripheral_std_uart = {};
 REGION_DECLARE(Load$$LR$$, LR_NS_PARTITION, $$Base);
 REGION_DECLARE(Image$$, ER_VENEER, $$Base);
 REGION_DECLARE(Image$$, VENEER_ALIGN, $$Limit);
-/* Start of Secure XIP flash (ORIGIN(FLASH) in linker = S_CODE_START) */
-REGION_DECLARE(Image$$, PT_RO_START, $$Base);
 
 #ifdef BL2
 REGION_DECLARE(Load$$LR$$, LR_SECONDARY_PARTITION, $$Base);
@@ -165,34 +163,26 @@ struct sau_cfg_t {
 };
 
 const struct sau_cfg_t sau_cfg[] = {
-	/* entry0 (NS): shared ROM NS region */
 	{
-		0x0001F000,
-		0x00200000 - 1,
+		0x0001E000,
+		0x000447FF,
 		false,
 	},
-	/* entry1 (NS): flash/SRAM before Secure XIP start (0x00C00020).
-	 * Must end before S_CODE_START so the Secure XIP range is not marked NS. */
 	{
-		0x00200000,
-		(uint32_t) &REGION_NAME(Image$$, PT_RO_START, $$Base) - 0x20 - 1,
+		SPI_FLASH_BASE,
+		(u32)__km4_boot_text_start__ - IMAGE_HEADER_LEN - 1,
 		false,
 	},
-	/* entry2 (NSC): NSC veneers inside merged S SRAM */
+	{
+		0x10000000,
+		__vectors_start__ - 0x20 - 1,
+		false,
+	},
 	{
 		(uint32_t) &REGION_NAME(Image$$, ER_VENEER, $$Base),
 		(uint32_t) &REGION_NAME(Image$$, VENEER_ALIGN, $$Limit) - 1,
 		true,
 	},
-	/* entry3 (NS): NS flash + SRAM between Secure XIP end (0x01000000) and
-	 * S SRAM start (__vectors_start__). Covers NS XIP code (0x02000000,
-	 * 0x04000000) and NS stack below S_DATA_START. */
-	{
-		0x01000000,
-		(uint32_t)__vectors_start__ - 0x20 - 1,
-		false,
-	},
-	/* entry4 (NS): region after S SRAM (NS SRAM + peripherals) */
 	{
 		(uint32_t)__image2_entry_func__ - 0x20,
 #if (defined(SECURE_UART1) && defined(PSA_FF_TEST_SECURE_UART2))

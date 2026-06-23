@@ -96,6 +96,10 @@ SECTIONS
     } > KM4TZ_MSP_RAM_S
     __StackSeal = ADDR(.msp_stack_seal_res);
 
+    /* Start address of the code. */
+    Image$$PT_RO_START$$Base = ORIGIN(ROMABLE_REGION);
+    . =  ORIGIN(RAMABLE_REGION);
+
     .TFM_VECTORS : ALIGN(4)
     {
         __vectors_start__ = .;
@@ -109,10 +113,6 @@ SECTIONS
     . =  LOADADDR(.TFM_VECTORS) + SIZEOF(.TFM_VECTORS);
 
     VENEERS()
-
-    /* Start address of the code. */
-    Image$$PT_RO_START$$Base = ORIGIN(FLASH);
-    . =  LOADADDR(.gnu.sgstubs) + SIZEOF(.gnu.sgstubs);
 
     /**** Section for holding partition RO load data */
     /*

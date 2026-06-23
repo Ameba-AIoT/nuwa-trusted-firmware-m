@@ -102,9 +102,9 @@
 #define S_DATA_START    (S_RAM_ALIAS(0x0))
 
 #if !defined(TFM_NS_REG_TEST) && !defined(TFM_S_REG_TEST)
-#define S_DATA_SIZE     (60 * 1024)
+#define S_DATA_SIZE     (172 * 1024)
 #else
-#define S_DATA_SIZE     (140 * 1024)
+#define S_DATA_SIZE     (256 * 1024)
 #endif
 
 #define S_DATA_LIMIT    (S_DATA_START + S_DATA_SIZE - 1)
@@ -112,17 +112,8 @@
 /* Non-secure regions */
 #define NS_IMAGE_PRIMARY_AREA_OFFSET \
                         (NS_IMAGE_PRIMARY_PARTITION_OFFSET + BL2_HEADER_SIZE)
-/* In BL2 mode the signed NS binary is loaded to XIP at NS_AP_LOGIC_BASE
- * (0x04000000) by img1.  The first BL2_HEADER_SIZE bytes = MCUboot header.
- * NS code is linked from NS_AP_LOGIC_BASE + BL2_HEADER_SIZE so that the .vt_bl2
- * stub (placed first in .text) lands exactly where tfm_hal_get_ns_MSP() and
- * tfm_hal_get_ns_entry_point() read from.
- * Note: this definition assumes MCUBOOT_IMAGE_NUMBER=2 (separate NS slot). */
-#ifdef BL2
-#define NS_CODE_START   (NS_AP_LOGIC_BASE + BL2_HEADER_SIZE)
-#else
+// #define NS_CODE_START   (NS_ROM_ALIAS(NS_IMAGE_PRIMARY_AREA_OFFSET))
 #define NS_CODE_START   (NS_ROM_ALIAS(0))
-#endif
 #define NS_CODE_SIZE    (IMAGE_NS_CODE_SIZE)
 #define NS_CODE_LIMIT   (NS_CODE_START + NS_CODE_SIZE - 1)
 
@@ -148,12 +139,16 @@
 
 #ifdef BL2
 /* Bootloader regions */
-#define BL2_CODE_START    (0x10400020)
+/* FLASH_BASE_ADDRESS(0x0BFFF000) + 0x1000(manifest) + 0x20(ameba image header) */
+#define BL2_CODE_START    (FLASH_BASE_ADDRESS + 0x1020)
 #define BL2_CODE_SIZE     (FLASH_AREA_BL2_SIZE)
 #define BL2_CODE_LIMIT    (BL2_CODE_START + BL2_CODE_SIZE - 1)
 
-#define BL2_DATA_START    (S_RAM_ALIAS(0x0))
-#define BL2_DATA_SIZE     (TOTAL_RAM_SIZE)
+/* BL2 data placed in HP_SRAM0 (0x30000000, 512KB) above KM4_IMG1_ENTRY (0x3000A020+0x100).
+ * This avoids overlap with the S image copy region [S_IMAGE_LOAD_ADDRESS, ~0x20033600)
+ * in main SRAM, allowing MCUBOOT_RAM_LOAD to copy the S image without corrupting BL2 state. */
+#define BL2_DATA_START    (0x3000A120)
+#define BL2_DATA_SIZE     (0x8000)      /* 32KB — plenty for stack+mbedtls+boot_data */
 #define BL2_DATA_LIMIT    (BL2_DATA_START + BL2_DATA_SIZE - 1)
 #endif /* BL2 */
 
@@ -187,5 +182,8 @@
 /* KM4TZ MSP_S RAM */
 #define S_KM4TZ_MSP_RAM_ADDR KM4TZ_MSP_RAM_S_ADDR
 #define S_KM4TZ_MSP_RAM_SIZE KM4TZ_MSP_RAM_S_SIZE
+
+#define KM4_IMG2_ENTRY_AMEBADPLUS KM4_IMG2_ENTRY
+#define KM4_IMG2_ENTRY_SIZE_AMEBADPLUS KM4_IMG2_ENTRY_SIZE
 
 #endif /* __REGION_DEFS_H__ */

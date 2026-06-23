@@ -15,7 +15,7 @@ include(remote_library)
 add_library(platform_ns)
 
 # Add hal_realtek in build system
-set(TARGET_SOC "amebag2" CACHE STRING "The target Realtek SOC (e.g., amebag2, amebadplus)")
+set(TARGET_SOC "amebadplus" CACHE STRING "The target Realtek SOC (e.g., amebag2, amebadplus)")
 include(hal_realtek.cmake)
 
 #========================= Platform common defs ===============================#
@@ -23,10 +23,9 @@ include(hal_realtek.cmake)
 # Specify the location of platform specific build dependencies.
 target_sources(platform_ns
     PRIVATE
-        cmsis_core/startup_amebag2.c
+        cmsis_core/startup_amebadplus.c
         cmsis_core/system_core_init.c
         tfm_hal_platform.c
-        $<$<BOOL:${BL2}>:tfm_ns_vt_bl2.S>
 )
 
 # Include region_defs.h and flash_layout.h
@@ -42,7 +41,10 @@ target_include_directories(platform_ns
         ${HAL_REALTEK_COMMON_DIR}/include
         ${HAL_REALTEK_OS_WRAPPER_DIR}/include
         ${HAL_REALTEK_SOC_DIR}/fwlib/include
-        ${HAL_REALTEK_SOC_DIR}/fwlib/include/rom
+        ${HAL_REALTEK_SOC_DIR}/swlib
+        ${HAL_REALTEK_SOC_DIR}/app/monitor/include/
+        ${HAL_REALTEK_SOC_DIR}/misc
+        # ${HAL_REALTEK_SOC_DIR}/lib/include
         ${HAL_REALTEK_USRCFG_DIR}/include
         ${HAL_REALTEK_USRCFG_DIR}/../common
         .
@@ -89,84 +91,73 @@ target_compile_definitions(platform_region_defs
         $<$<BOOL:${TFM_NS_REG_TEST}>:TFM_NS_REG_TEST=1>
 )
 
-# Add ROM symbol linker script for Realtek AmebaG2
+# Add ROM symbol linker script for Realtek Amebadplus
 target_link_libraries(platform_ns
     PUBLIC
-        -T${HAL_REALTEK_PRJ_DIR}/ld/ameba_rom_symbol_bcut.ld
+        -T${HAL_REALTEK_PRJ_DIR}/ld/ameba_rom_symbol_acut.ld
 )
 
 
 ############################ bin handle ########################################
 # Auto-generate disassembly and map files
 add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/bin/tfm_ns.asm ${CMAKE_BINARY_DIR}/bin/km4tz_image2_all.bin
-           ${CMAKE_BINARY_DIR}/bin/xip_2_ns_bl2.bin
+    OUTPUT ${CMAKE_BINARY_DIR}/bin/tfm_ns.asm ${CMAKE_BINARY_DIR}/bin/km4_image2_all.bin
     DEPENDS tfm_ns
 
     # 1. Generate map and asm
     COMMAND ${CMAKE_NM} ${CMAKE_BINARY_DIR}/bin/tfm_ns.axf | sort > ${CMAKE_BINARY_DIR}/bin/tfm_ns.raw.map
     COMMAND ${CMAKE_OBJDUMP} -d ${CMAKE_BINARY_DIR}/bin/tfm_ns.axf > ${CMAKE_BINARY_DIR}/bin/tfm_ns.asm
 
-    # 2. Copy and strip
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/tfm_ns.axf ${CMAKE_BINARY_DIR}/bin/target_pure_tfm.axf
-    COMMAND ${CMAKE_STRIP} ${CMAKE_BINARY_DIR}/bin/target_pure_tfm.axf
+    # 2. Copy and strip, keep the same file names as merge_bin.py
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/tfm_ns.axf ${CMAKE_BINARY_DIR}/bin/target_pure_img2.axf
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/tfm_ns.raw.map ${CMAKE_BINARY_DIR}/bin/target_img2.map
+    COMMAND ${CMAKE_STRIP} ${CMAKE_BINARY_DIR}/bin/target_pure_img2.axf
 
-    # 3. Extract sections (Excluding .bss to prevent file bloat)
-    # SRAM: Extract using your specific data/ram sections
-    COMMAND ${CMAKE_OBJCOPY} -j .data -j .tfm_ns_entry
-            -Obinary ${CMAKE_BINARY_DIR}/bin/target_pure_tfm.axf ${CMAKE_BINARY_DIR}/bin/ram_2_ns.bin
+    # 3. Prepare xip_image2.bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/tfm_ns.bin ${CMAKE_BINARY_DIR}/bin/xip_image2.bin
 
-    # PSRAM: Extract PSRAM section (Replace '.psram_data' with your actual section name)
-    COMMAND ${CMAKE_OBJCOPY} -j .psram_data
-            -Obinary ${CMAKE_BINARY_DIR}/bin/target_pure_tfm.axf ${CMAKE_BINARY_DIR}/bin/psram_2_ns.bin
+    # 4. Extract sections exactly like handle_amebadplus()
+    COMMAND ${CMAKE_OBJCOPY} -j .tfm_ns_entry -Obinary
+            ${CMAKE_BINARY_DIR}/bin/target_pure_img2.axf ${CMAKE_BINARY_DIR}/bin/entry.bin
+    COMMAND ${CMAKE_OBJCOPY} -j .data -Obinary
+            ${CMAKE_BINARY_DIR}/bin/target_pure_img2.axf ${CMAKE_BINARY_DIR}/bin/sram_2.bin
+    COMMAND ${CMAKE_OBJCOPY} -j .null.empty -Obinary
+            ${CMAKE_BINARY_DIR}/bin/target_pure_img2.axf ${CMAKE_BINARY_DIR}/bin/psram_2.bin
 
-    # XIP: Exclude RAM/PSRAM and uninitialized sections
-    COMMAND ${CMAKE_OBJCOPY} -R .data -R .tfm_ns_entry -R .psram_data
-            -Obinary ${CMAKE_BINARY_DIR}/bin/target_pure_tfm.axf ${CMAKE_BINARY_DIR}/bin/xip_2_ns.bin
+    # 5. Pad xip image only, same as merge_bin.py
+    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
+            -i ${CMAKE_BINARY_DIR}/bin/xip_image2.bin -l 32
 
-    # 4. Create BL2-compatible NS binary (xip_2_ns_bl2.bin) BEFORE padding.
-    #    .vt_bl2 is placed first in .text (FLASH) at NS_CODE_START, so
-    #    xip_2_ns.bin naturally starts with [initial_SP, Reset_Handler, ...]:
-    #      [NS_CODE_START = NS_AP_LOGIC_BASE + BL2_HEADER_SIZE]
-    #        -> [initial_SP, Reset_Handler, ...]  <- tfm_hal_get_ns_MSP/entry_point read here
-    #        -> .text code ...
-    #      [after .ARM.exidx]: .tfm_ns_entry LMA + .data LMA  <- copy-table copies .data to RAM
-    #    Must run before the in-place pad step below.
+    # 6. Prepend headers with the same symbols used by merge_bin.py
+    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+            -o ${CMAKE_BINARY_DIR}/bin/entry_prepend.bin
+            -i ${CMAKE_BINARY_DIR}/bin/entry.bin
+            -s __image2_entry_func_entry__ -m ${CMAKE_BINARY_DIR}/bin/target_img2.map
+
+    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+            -o ${CMAKE_BINARY_DIR}/bin/sram_2_prepend.bin
+            -i ${CMAKE_BINARY_DIR}/bin/sram_2.bin
+            -s __data_start__ -m ${CMAKE_BINARY_DIR}/bin/target_img2.map
+
+    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+            -o ${CMAKE_BINARY_DIR}/bin/psram_2_prepend.bin
+            -i ${CMAKE_BINARY_DIR}/bin/psram_2.bin
+            -s Image$$NS_CODE_START$$Base -m ${CMAKE_BINARY_DIR}/bin/target_img2.map
+
+    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+            -o ${CMAKE_BINARY_DIR}/bin/xip_image2_prepend.bin
+            -i ${CMAKE_BINARY_DIR}/bin/xip_image2.bin
+            -s Image$$NS_CODE_START$$Base -m ${CMAKE_BINARY_DIR}/bin/target_img2.map
+
+    # 7. Concat in the exact same order as handle_amebadplus()
     COMMAND ${CMAKE_COMMAND} -E cat
-            ${CMAKE_BINARY_DIR}/bin/xip_2_ns.bin
-            ${CMAKE_BINARY_DIR}/bin/ram_2_ns.bin
-            > ${CMAKE_BINARY_DIR}/bin/xip_2_ns_bl2.bin
+            ${CMAKE_BINARY_DIR}/bin/xip_image2_prepend.bin
+            ${CMAKE_BINARY_DIR}/bin/sram_2_prepend.bin
+            ${CMAKE_BINARY_DIR}/bin/psram_2_prepend.bin
+            ${CMAKE_BINARY_DIR}/bin/entry_prepend.bin
+            > ${CMAKE_BINARY_DIR}/bin/km4_image2_all.bin
 
-    # 5. Pad 32 bytes for alignment (for non-BL2 Realtek format use)
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
-            -i ${CMAKE_BINARY_DIR}/bin/xip_2_ns.bin -l 32
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
-            -i ${CMAKE_BINARY_DIR}/bin/ram_2_ns.bin -l 32
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
-            -i ${CMAKE_BINARY_DIR}/bin/psram_2_ns.bin -l 32
-
-    # 6. Prepend headers (Using your custom symbols)
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
-            -o ${CMAKE_BINARY_DIR}/bin/xip_2_ns_prepend.bin
-            -i ${CMAKE_BINARY_DIR}/bin/xip_2_ns.bin
-            -s Image$$NS_CODE_START$$Base -m ${CMAKE_BINARY_DIR}/bin/tfm_ns.raw.map
-
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
-            -o ${CMAKE_BINARY_DIR}/bin/ram_2_ns_prepend.bin
-            -i ${CMAKE_BINARY_DIR}/bin/ram_2_ns.bin
-            -s Image$$NS_DATA_START$$Base -m ${CMAKE_BINARY_DIR}/bin/tfm_ns.raw.map
-
-    # PSRAM Header: Replace '__psram_start__' with your actual symbol from tfm_ns.raw.map
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
-            -o ${CMAKE_BINARY_DIR}/bin/psram_2_ns_prepend.bin
-            -i ${CMAKE_BINARY_DIR}/bin/psram_2_ns.bin
-            -s Image$$NS_CODE_START$$Base -m ${CMAKE_BINARY_DIR}/bin/tfm_ns.raw.map
-
-    # 7. Concat: Merging strict order -> XIP + SRAM + PSRAM
-    COMMAND ${CMAKE_COMMAND} -E cat ${CMAKE_BINARY_DIR}/bin/xip_2_ns_prepend.bin ${CMAKE_BINARY_DIR}/bin/ram_2_ns_prepend.bin ${CMAKE_BINARY_DIR}/bin/psram_2_ns_prepend.bin
-            > ${CMAKE_BINARY_DIR}/bin/km4tz_image2_all.bin
-
-    COMMENT "Generating tfm_ns.asm and km4tz_image2_all.bin"
+    COMMENT "Generating tfm_ns.asm and AmebaDplus-compatible km4_image2_all.bin"
     VERBATIM
 )
 

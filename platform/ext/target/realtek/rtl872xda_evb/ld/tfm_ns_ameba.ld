@@ -38,9 +38,6 @@ __stack_size__ = NS_STACK_SIZE;
 
 ENTRY(Reset_Handler)
 
-/* Force the BL2 vector table object to be included from libplatform_ns.a */
-EXTERN(tfm_ns_bl2_vt)
-
 SECTIONS
 {
     /* Start address of the code. */
@@ -49,9 +46,6 @@ SECTIONS
 
     .text (READONLY) :
     {
-        /* BL2 ARM VT at NS_CODE_START: [initial_SP, Reset_Handler|1].
-         * tfm_hal_get_ns_MSP() reads +0, tfm_hal_get_ns_entry_point() reads +4. */
-        KEEP(*(.vt_bl2))
         *(.text*)
 
         . = ALIGN(4);
@@ -77,9 +71,7 @@ SECTIONS
         /* .copy.table */
         . = ALIGN(4);
         __copy_table_start__ = .;
-        LONG (LOADADDR(.data))
-        LONG (ADDR(.data))
-        LONG (SIZEOF(.data) / 4)
+
         __copy_table_end__ = .;
 
         /* .zero.table */
@@ -135,8 +127,6 @@ SECTIONS
         KEEP(*(.vectors))
         . = ALIGN(4);
         __vectors_end__ = .;
-        KEEP(*(.ramvectortable))
-        . = ALIGN(4);
     } > RAM  AT> FLASH /* Special, need Bootlaoder Copy */
 #else
     .tfm_ns_entry ORIGIN(KM4_IMG2_ENTRY_ENTRY) :
@@ -151,13 +141,6 @@ SECTIONS
     Image$$NS_DATA_START$$Base = ORIGIN(RAM);
     . = Image$$NS_DATA_START$$Base;
 
-    .ram_vector_table ALIGN(512) :
-    {
-        __ram_vector_start__ = .;
-        KEEP(*(.ramvectortable))
-        . = ALIGN(4);
-        __ram_vector_end__ = .;
-    } > RAM  AT> FLASH
 #endif
 
     .data :
