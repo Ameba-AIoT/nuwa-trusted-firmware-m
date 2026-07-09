@@ -167,8 +167,10 @@ SECTIONS
 
     __image2_entry_func__ = __non_secure_psram_start__;
 
-    /* Stub for ameba_psram.c PSRAM section symbol (not used in BL2) */
-    PROVIDE(__km4_bd_psram_start__ = 0x0);
+    /* BL2 runs before TrustZone SAU/MPC is configured, so the entire PSRAM
+     * is NS-accessible and calibration can start from the physical base.
+     * Using 0x0 here caused a BusFault in PSRAM_calibration(). */
+    PROVIDE(__km4_bd_psram_start__ = 0x60000000);
 
     .data : ALIGN(4)
     {
