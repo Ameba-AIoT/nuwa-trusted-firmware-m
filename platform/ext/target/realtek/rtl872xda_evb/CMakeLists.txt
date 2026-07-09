@@ -156,6 +156,7 @@ if(BL2)
         PRIVATE
             CONFIG_ARM_CORE_CM4
             CONFIG_ARM_CORE_CM4_KM4TZ
+            CONFIG_TRUSTZONE   # enable TrustZone MPC config path in BOOT_RAM_TZCfg
     )
 
     target_include_directories(platform_bl2
@@ -188,6 +189,7 @@ if(BL2)
             BLOCK_ERASE_DEFINE
             SECURE_KEY_PUB_ARRAY_NAME=${SECURE_KEY_PUB_ARRAY_NAME}
             NONSECURE_KEY_PUB_ARRAY_NAME=${NONSECURE_KEY_PUB_ARRAY_NAME}
+            CONFIG_TRUSTZONE   # enable TrustZone MPC config path in BOOT_RAM_TZCfg
     )
 
     target_include_directories(bl2
@@ -238,6 +240,7 @@ if(BL2)
 
             ${HAL_REALTEK_USRCFG_DIR}/ameba_bootcfg.c
             ${HAL_REALTEK_USRCFG_DIR}/ameba_flashcfg.c
+            ${HAL_REALTEK_USRCFG_DIR}/ameba_boot_trustzonecfg.c
 
             $<$<NOT:$<BOOL:${DEFAULT_MCUBOOT_SECURITY_COUNTERS}>>:${HAL_REALTEK_SOC_DIR}/loader/mcuboot/mcuboot_security_cnt.c>
             $<$<NOT:$<BOOL:${DEFAULT_MCUBOOT_SECURITY_COUNTERS}>>:${HAL_REALTEK_SOC_DIR}/loader/mcuboot/ameba_security_counter_utils.c>
@@ -247,7 +250,12 @@ if(BL2)
         PUBLIC
             -T${HAL_REALTEK_PRJ_DIR}/ld/ameba_rom_symbol_acut_s.ld
             ${HAL_REALTEK_LIB_DIR}/lib_chipinfo.a
+            # Use --whole-archive so that weak symbols in lib_bootloader.a
+            # (mpc1_config, mpc2_config) can be overridden by the strong
+            # definitions in ameba_boot_trustzonecfg.c, matching sdk2 behavior.
+            -Wl,--whole-archive
             ${HAL_REALTEK_LIB_DIR}/lib_bootloader.a
+            -Wl,--no-whole-archive
     )
     target_add_scatter_file(bl2
             $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_SOURCE_DIR}/ld/tfm_common_bl2.ld>
