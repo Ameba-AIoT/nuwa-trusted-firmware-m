@@ -13,7 +13,6 @@
 #include "async.h"
 #include "config_spm.h"
 #include "critical_section.h"
-#include "compiler_ext_defs.h"
 #include "config_spm.h"
 #include "ffm/psa_api.h"
 #include "fih.h"
@@ -34,6 +33,7 @@
 #include "psa/error.h"
 #include "internal_status_code.h"
 #include "sprt_partition_metadata_indicator.h"
+#include "compiler_ext_defs.h"
 
 #if TFM_PARTITION_NS_AGENT_MAILBOX == 1
 #include "psa_manifest/ns_agent_mailbox.h"
@@ -611,7 +611,19 @@ uint64_t ipc_schedule(uint32_t exc_return)
     if (p_part_next->p_metadata == NULL) {
         tfm_core_panic();
     }
+#if CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION == 1
+    /* Call API to ensure that shared metadata section is RW accessible before
+     * changing it
+     */
+    tfm_hal_shared_metadata_rw_enable();
+#endif /* CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION == 1 */
     p_partition_metadata = (uintptr_t)(p_part_next->p_metadata);
+#if CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION == 1
+    /* Call API to ensure that shared metadata section is RO accessible after
+     * changing it
+     */
+    tfm_hal_shared_metadata_rw_disable();
+#endif /* CONFIG_TFM_PARTITION_META_DYNAMIC_ISOLATION == 1 */
 
     /*
      * ctx_ctrl is set from struct thread_t's p_context_ctrl, and p_part_curr

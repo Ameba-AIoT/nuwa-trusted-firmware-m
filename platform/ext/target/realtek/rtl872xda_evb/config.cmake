@@ -25,6 +25,7 @@ set(MCUBOOT_USE_PSA_CRYPTO            ON           CACHE BOOL      "Enable the c
 set(MCUBOOT_SIGNATURE_TYPE            "EC-P256"    CACHE STRING    "Algorithm to use for signature validation [RSA-2048, RSA-3072, EC-P256, EC-P384]")
 set(MCUBOOT_HW_KEY                    OFF          CACHE BOOL      "Whether to embed the entire public key in the image metadata instead of the hash only")
 set(MCUBOOT_BUILTIN_KEY               ON           CACHE BOOL      "Use builtin key(s) for validation, no public key data is embedded into the image metadata")
+set(MCUBOOT_FIH_PROFILE               "OFF"        CACHE STRING    "MCUboot fault injection hardening profile")
 
 
 set(HAL_REALTEK_PATH                  "DOWNLOAD"   CACHE PATH      "Path to hal_realtek (or DOWNLOAD to fetch automatically")
@@ -36,3 +37,10 @@ set(TFM_PARTITION_LOG_LEVEL                TFM_PARTITION_LOG_LEVEL_DEBUG   CACHE
 set(MCUBOOT_HW_ROLLBACK_PROT            OFF          CACHE BOOL      "Enable security counter validation against non-volatile HW counters")
 set(DEFAULT_MCUBOOT_SECURITY_COUNTERS   OFF          CACHE BOOL      "Whether to use the default security counter configuration defined by TF-M project")
 set(MCUBOOT_SECURITY_COUNTER_S          1           CACHE STRING    "Security counter for S image. auto sets it to IMAGE_VERSION_S")
+
+# Disable boot measurements: startup_bl2.c does not yet call boot_save_shared_data(),
+# so the BOOT_DATA_AVAILABLE gate (BL2 AND CONFIG_TFM_BOOT_STORE_MEASUREMENTS, see
+# secure_fw/spm/CMakeLists.txt) would keep is_boot_data_valid=0 and cause the Initial
+# Attestation partition init to fail -> reboot loop. Same fix as rtl8721f_evb.
+set(CONFIG_TFM_BOOT_STORE_MEASUREMENTS          OFF  CACHE BOOL      "Store boot measurements in shared data area")
+set(CONFIG_TFM_BOOT_STORE_ENCODED_MEASUREMENTS  OFF  CACHE BOOL      "Store boot measurements in CBOR-encoded form")

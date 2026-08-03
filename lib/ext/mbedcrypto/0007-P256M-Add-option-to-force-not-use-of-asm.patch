@@ -1,4 +1,4 @@
-From 50076f9bfcbca17c0a8648ab3d5077ea420da385 Mon Sep 17 00:00:00 2001
+From f67bf29c8c437a9f14bfa773c3a64ae78da95333 Mon Sep 17 00:00:00 2001
 From: Antonio de Angelis <Antonio.deAngelis@arm.com>
 Date: Wed, 9 Oct 2024 13:36:42 +0100
 Subject: [PATCH 7/7] P256M: Add option to force not use of asm
@@ -25,6 +25,6 @@ index 42c35b5bf..558a8bc95 100644
      defined(__ARM_ARCH) && __ARM_ARCH >= 6 && defined(__ARM_ARCH_PROFILE) && \
      ( __ARM_ARCH_PROFILE == 77 || __ARM_ARCH_PROFILE == 65 ) /* 'M' or 'A' */ && \
      !defined(__aarch64__)
--- 
+--
 2.34.1
 

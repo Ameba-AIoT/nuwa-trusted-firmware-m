@@ -31,6 +31,8 @@ set(RSE_TP_MODE                         TCI        CACHE STRING "Whether system 
 set(TFM_NS_NV_COUNTER_AMOUNT            3          CACHE STRING   "How many NS NV counters are enabled")
 set(TFM_ISOLATION_LEVEL                 2          CACHE STRING   "Isolation level")
 
+set(TFM_DEBUG_OPTIMISATION              ON         CACHE BOOL      "Add basic -Og optimisation when CMAKE_BUILD_TYPE is Debug. Note that non Debug builds specify their own optimisation")
+
 ################# Partitions ###################################################
 
 set(TFM_PARTITION_CRYPTO                ON         CACHE BOOL     "Enable Crypto partition")
@@ -115,6 +117,7 @@ set(MCUBOOT_SIGNATURE_TYPE            "EC-P256"        CACHE STRING    "Algorith
 
 set(MCUBOOT_HW_KEY                    ON               CACHE BOOL      "Whether to embed the entire public key in the image metadata instead of the hash only")
 set(MCUBOOT_BUILTIN_KEY               OFF              CACHE BOOL      "Use builtin key(s) for validation, no public key data is embedded into the image metadata")
+set(CONFIG_BOOT_RAM_LOAD              ON               CACHE BOOL      "Whether to enable RAM load support")
 
 set(RSE_USE_HOST_FLASH                  ON         CACHE BOOL     "Enable RSE using the host flash.")
 set(RSE_LOAD_NS_IMAGE                   ON         CACHE BOOL     "Whether to load an RSE NSPE image")

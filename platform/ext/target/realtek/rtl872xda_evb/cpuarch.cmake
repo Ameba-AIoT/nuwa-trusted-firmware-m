@@ -16,3 +16,6 @@ set(CONFIG_TFM_FP_ARCH "fpv5-sp-d16")
 set(CONFIG_TFM_FP_ARCH_ASM "FPv5_SP_D16")
 # amebadplus precompiled libs use hard-float VFP ABI; BL2 must match
 set(CONFIG_TFM_BL2_FLOAT_ABI "hard")
+
+# RTK toolchain ships with newlib-nano, not picolibc
+set(CONFIG_PICOLIBC FALSE)

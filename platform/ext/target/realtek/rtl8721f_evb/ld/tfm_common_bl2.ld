@@ -30,8 +30,8 @@ MEMORY
 
 __heap_size__  = BL2_HEAP_SIZE;
 __msp_stack_size__ = BL2_MSP_STACK_SIZE;
-__non_secure_psram_start__ = 0x20016020;
-__non_secure_psram_end__ = __non_secure_psram_start__ + 0x3a000;
+__non_secure_psram_start__ = NS_RAM_ALIAS_BASE;  /* from flash_layout.h; S=60/96/140 KB */
+__non_secure_psram_end__ = 0x20068000;           /* SRAM top */
 ENTRY(Reset_Handler)
 
 SECTIONS
@@ -146,6 +146,10 @@ SECTIONS
     Image$$SHARED_DATA$$RW$$Limit = ADDR(.tfm_bl2_shared_data) + SIZEOF(.tfm_bl2_shared_data);
 
     __image2_entry_func__ = __non_secure_psram_start__;
+    /* Stub for bootloader_km4tz.c (compiled as BL2 source but never called from
+     * BL2 — mcuboot handles the NS jump). ameba_boot.h declares this symbol for
+     * the TrustZone code path; provide a dummy so the linker does not error. */
+    PROVIDE(__image3_entry_func__ = 0x0);
 
     .data : ALIGN(4)
     {

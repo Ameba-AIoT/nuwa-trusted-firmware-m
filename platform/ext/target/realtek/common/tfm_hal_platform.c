@@ -87,7 +87,7 @@ FIH_RET_TYPE(enum tfm_hal_status_t) tfm_hal_platform_init(void)
 #if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
 uint32_t tfm_hal_get_ns_VTOR(void)
 {
-#if defined(CONFIG_AMEBADPLUS) && defined(BL2)
+#if defined(SOC_AMEBADPLUS) && defined(BL2)
 	/* mcuboot BL2 does not run amebadplus stock BOOT_NsStart, so
 	 * SCB_NS->VTOR is not yet set. Return the NS image vector table
 	 * base (RSIP-mapped just after the mcuboot 0x400 header). */
@@ -100,7 +100,7 @@ uint32_t tfm_hal_get_ns_VTOR(void)
 uint32_t tfm_hal_get_ns_MSP(void)
 {
 	// return *((uint32_t *)memory_regions.non_secure_code_start);
-#ifdef CONFIG_AMEBADPLUS
+#ifdef SOC_AMEBADPLUS
 #ifdef BL2
 	return *((uint32_t *)(NS_AP_LOGIC_BASE + 0x400));
 #else
@@ -119,7 +119,28 @@ uint32_t tfm_hal_get_ns_MSP(void)
 uint32_t tfm_hal_get_ns_entry_point(void)
 {
 	// return *((uint32_t *)(memory_regions.non_secure_code_start + 4));
-#ifdef CONFIG_AMEBADPLUS
+#if defined(BL2) && defined(SOC_AMEBADPLUS)
+	/*
+	 * amebadplus-only: VTOR_NS is still 0 at NS entry (BL2 skips BOOT_NsStart)
+	 * and secure Crypto leaves TRNG_IRQ NS-targeted+pending, which would vector
+	 * through 0 and HardFault-lockup. Secure can't write the NS NVIC alias, so
+	 * reclaim TRNG to Secure via ITNS and disable it (safe: TRNG is polled).
+	 * Gated on SOC_AMEBADPLUS (shared with amebag2, different IRQ map).
+	 */
+	NVIC_ClearTargetState(TRNG_IRQ); /* -> Secure target */
+	NVIC_DisableIRQ(TRNG_IRQ);
+	NVIC_ClearPendingIRQ(TRNG_IRQ);
+
+	/*
+	 * Standard TrustZone handoff: mask PRIMASK_NS (Secure-writable banked reg)
+	 * so no exception fires before the NS Reset_Handler relocates VTOR; the NS
+	 * clears it (__enable_irq) once VTOR is set. SVC (PSA calls) is unaffected.
+	 */
+	__TZ_set_PRIMASK_NS(1);
+	__DSB();
+	__ISB();
+#endif
+#ifdef SOC_AMEBADPLUS
 #ifdef BL2
 	/*
 	 * mcuboot/BL2 path: NS image is RSIP-mapped at NS_AP_LOGIC_BASE.

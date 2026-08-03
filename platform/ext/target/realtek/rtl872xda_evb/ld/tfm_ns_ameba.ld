@@ -44,6 +44,13 @@ SECTIONS
     Image$$NS_CODE_START$$Base = ORIGIN(FLASH);
     . = Image$$NS_CODE_START$$Base;
 
+    /* [MSP, Reset] table the secure side reads at the NS image start; must be
+     * the first bytes. Emitted by .ns_boot_vectors in startup_amebadplus.c. */
+    .ns_boot_vectors (READONLY) : ALIGN(4)
+    {
+        KEEP(*(.ns_boot_vectors))
+    } > FLASH
+
     .text (READONLY) :
     {
         *(.text*)
@@ -71,7 +78,11 @@ SECTIONS
         /* .copy.table */
         . = ALIGN(4);
         __copy_table_start__ = .;
-
+        /* Copy .data flash LMA -> RAM (walked by __cmsis_start); without it NS
+         * .data stays uninitialised and crashes in _start/main. */
+        LONG (LOADADDR(.data))
+        LONG (ADDR(.data))
+        LONG (SIZEOF(.data) / 4)
         __copy_table_end__ = .;
 
         /* .zero.table */

@@ -42,7 +42,7 @@ target_sources(tfm_api_ns
 target_include_directories(tfm_api_ns
     PUBLIC
         ${INTERFACE_INC_DIR}
-        ${INTERFACE_INC_DIR}/crypto_keys
+        $<$<BOOL:${PLATFORM_DEFAULT_CRYPTO_KEYS}>:${INTERFACE_INC_DIR}/crypto_keys>
 )
 
 if (CONFIG_TFM_USE_TRUSTZONE)
@@ -104,6 +104,7 @@ add_subdirectory(platform)
 
 target_sources(platform_ns
     PRIVATE
+        $<$<BOOL:${CONFIG_PICOLIBC}>:${CMAKE_CURRENT_SOURCE_DIR}/platform/ext/common/picolibc.c>
         $<$<BOOL:${PLATFORM_DEFAULT_UART_STDOUT}>:${CMAKE_CURRENT_SOURCE_DIR}/platform/ext/common/uart_stdout.c>
 )
 

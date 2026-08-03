@@ -34,7 +34,12 @@
 #define S_PSP_STACK_SIZE        (0x00000800)
 
 #define NS_HEAP_SIZE            (0x00001000)
-#define NS_STACK_SIZE           (0x000001E0)
+/* 0x1E0 (480 B) is far too small for a real TF-M NS app (e.g. tfm_psa_test's
+ * psa-arch-test runner does crypto/attestation): the NS MSP stack overflowed
+ * below NS_RAM base into secure RAM, raising STKOF + SAU AUVIOL at NS startup.
+ * (Never hit before because normal samples use the Zephyr app's own stack, not
+ * this TF-M NS stack — only CONFIG_TFM_USE_NS_APP images use it.) */
+#define NS_STACK_SIZE           (0x00002000)
 
 /* RTL8721F (AmebaG2) memory region definitions */
 
@@ -101,8 +106,11 @@
 
 #define S_DATA_START    (S_RAM_ALIAS(0x0))
 
+/* S_DATA_SIZE must stay in sync with NS_RAM_ALIAS_BASE in flash_layout.h.
+ * psa_crypto sample needs ~177 KB of S BSS; use 192 KB to give headroom.
+ * Regression test needs ~240 KB; use 256 KB. */
 #if !defined(TFM_NS_REG_TEST) && !defined(TFM_S_REG_TEST)
-#define S_DATA_SIZE     (172 * 1024)
+#define S_DATA_SIZE     (192 * 1024)
 #else
 #define S_DATA_SIZE     (256 * 1024)
 #endif
@@ -112,8 +120,15 @@
 /* Non-secure regions */
 #define NS_IMAGE_PRIMARY_AREA_OFFSET \
                         (NS_IMAGE_PRIMARY_PARTITION_OFFSET + BL2_HEADER_SIZE)
-// #define NS_CODE_START   (NS_ROM_ALIAS(NS_IMAGE_PRIMARY_AREA_OFFSET))
-#define NS_CODE_START   (NS_ROM_ALIAS(0))
+/* The NS image must be LINKED at the same address the secure side JUMPS to,
+ * otherwise its vector table holds link-relative addresses that don't match
+ * where the RSIP MMU maps the image at run time, and the S->NS jump lands in
+ * the wrong place (observed: bxns to a shifted Reset_Handler -> fault ->
+ * VTOR_NS=0 -> ROM). The secure reads the NS entry from
+ * NS_AP_LOGIC_BASE + BL2_HEADER_SIZE (see tfm_hal_get_ns_entry_point/_MSP),
+ * so link the NS there. NS_ROM_ALIAS(0)=0x0E000020 was a bring-up shortcut
+ * that broke this (link 0x0E000020 vs run 0x0E000400). */
+#define NS_CODE_START   (NS_AP_LOGIC_BASE + BL2_HEADER_SIZE)
 #define NS_CODE_SIZE    (IMAGE_NS_CODE_SIZE)
 #define NS_CODE_LIMIT   (NS_CODE_START + NS_CODE_SIZE - 1)
 

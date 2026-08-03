@@ -82,33 +82,35 @@ if (TFM_PARTITION_INTERNAL_TRUSTED_STORAGE)
 endif()
 
 if (TFM_PARTITION_CRYPTO)
-    install(FILES       ${INTERFACE_INC_DIR}/psa/README.rst
-                        ${INTERFACE_INC_DIR}/psa/build_info.h
-                        ${INTERFACE_INC_DIR}/psa/crypto.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_adjust_auto_enabled.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_adjust_config_dependencies.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_adjust_config_key_pair_types.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_adjust_config_synonyms.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_builtin_composites.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_builtin_key_derivation.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_builtin_primitives.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_compat.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_driver_common.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_driver_contexts_composites.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_driver_contexts_key_derivation.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_driver_contexts_primitives.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_extra.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_legacy.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_platform.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_se_driver.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_sizes.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_struct.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_types.h
-                        ${INTERFACE_INC_DIR}/psa/crypto_values.h
-            DESTINATION ${INSTALL_INTERFACE_INC_DIR}/psa)
+    if (TFM_INSTALL_MBEDTLS_HEADERS)
+        install(FILES       ${INTERFACE_INC_DIR}/psa/README.rst
+                            ${INTERFACE_INC_DIR}/psa/build_info.h
+                            ${INTERFACE_INC_DIR}/psa/crypto.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_adjust_auto_enabled.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_adjust_config_dependencies.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_adjust_config_key_pair_types.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_adjust_config_synonyms.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_builtin_composites.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_builtin_key_derivation.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_builtin_primitives.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_compat.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_driver_common.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_driver_contexts_composites.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_driver_contexts_key_derivation.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_driver_contexts_primitives.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_extra.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_legacy.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_platform.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_se_driver.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_sizes.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_struct.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_types.h
+                            ${INTERFACE_INC_DIR}/psa/crypto_values.h
+                DESTINATION ${INSTALL_INTERFACE_INC_DIR}/psa)
+        install(DIRECTORY   ${INTERFACE_INC_DIR}/mbedtls
+                DESTINATION ${INSTALL_INTERFACE_INC_DIR})
+    endif()
     install(FILES       ${INTERFACE_INC_DIR}/tfm_crypto_defs.h
-            DESTINATION ${INSTALL_INTERFACE_INC_DIR})
-    install(DIRECTORY   ${INTERFACE_INC_DIR}/mbedtls
             DESTINATION ${INSTALL_INTERFACE_INC_DIR})
 endif()
 
@@ -253,6 +255,11 @@ install(CODE "MESSAGE(\"----- Installing platform NS -----\")")
 install(DIRECTORY   $<BUILD_INTERFACE:${CMSIS_PATH}/CMSIS/Core/Include>
                     $<BUILD_INTERFACE:${CMSIS_PATH}/CMSIS/Driver/Include>
         DESTINATION ${INSTALL_PLATFORM_NS_DIR}/ext/cmsis)
+
+if(CONFIG_PICOLIBC)
+    install(FILES       ${PLATFORM_DIR}/ext/common/picolibc.c
+            DESTINATION ${INSTALL_PLATFORM_NS_DIR}/ext/common)
+endif()
 
 if(PLATFORM_DEFAULT_UART_STDOUT)
     install(FILES       ${PLATFORM_DIR}/ext/common/uart_stdout.c

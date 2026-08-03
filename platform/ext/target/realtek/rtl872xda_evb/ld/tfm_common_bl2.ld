@@ -167,10 +167,23 @@ SECTIONS
 
     __image2_entry_func__ = __non_secure_psram_start__;
 
-    /* BL2 runs before TrustZone SAU/MPC is configured, so the entire PSRAM
-     * is NS-accessible and calibration can start from the physical base.
-     * Using 0x0 here caused a BusFault in PSRAM_calibration(). */
-    PROVIDE(__km4_bd_psram_start__ = 0x60000000);
+    /*
+     * ameba_psram.c's PSRAM_calibration() (called from BOOT_PSRAM_Init(),
+     * which BL2 does run via boot_prepare()) writes/reads test patterns at
+     * __km4_bd_psram_start__ + {0, 0x50000, 0xA0000, ...}. This symbol was
+     * previously stubbed to 0x0 under the assumption it's unused in BL2,
+     * causing calibration to hit non-PSRAM addresses (e.g. 0xA0000) and
+     * imprecise-bus-fault. Must match ameba_layout.ld's
+     * __km4_bd_psram_start__ = ORIGIN(KM4_BD_PSRAM) - IMAGE_HEADER_LEN
+     * = KM4_IMG2_PSRAM_START (0x60010000).
+     */
+    PROVIDE(__km4_bd_psram_start__ = 0x60010000);
+
+    /* Stub for bootloader_km4.c (compiled as BL2 source but BOOT_WakeFromPG /
+     * BOOT_Image1 are never called from BL2 — mcuboot handles the NS jump).
+     * The CONFIG_TRUSTZONE branch references __ram_image3_start__; PROVIDE a
+     * dummy so the linker does not error on the unreachable code path. */
+    PROVIDE(__ram_image3_start__ = 0x0);
 
     .data : ALIGN(4)
     {

@@ -176,13 +176,36 @@ string(APPEND CMAKE_ASM_LINK_FLAGS " " ${LINKER_CP_OPTION})
 # For GNU Arm Embedded Toolchain doesn't emit __ARM_ARCH_8_1M_MAIN__, adding this macro manually.
 add_compile_definitions($<$<STREQUAL:${TFM_SYSTEM_ARCHITECTURE},armv8.1-m.main>:__ARM_ARCH_8_1M_MAIN__=1>)
 
+if(NOT DEFINED CONFIG_PICOLIBC)
+    set(CONFIG_PICOLIBC TRUE)
+endif()
+
+if (CONFIG_PICOLIBC)
+    set(LIBC_COMPILE_OPTIONS
+        -specs=picolibc.specs
+        )
+    set(LIBC_LINK_OPTIONS
+        -specs=picolibc.specs
+        -nostartfiles
+        -u main
+        )
+else()
+    set(LIBC_COMPILE_OPTIONS
+        -specs=nano.specs
+        -specs=nosys.specs
+        )
+    set(LIBC_LINK_OPTIONS
+        -specs=nano.specs
+        -specs=nosys.specs
+        )
+endif()
+
 add_compile_options(
-    -specs=nano.specs
-    -specs=nosys.specs
+    ${LIBC_COMPILE_OPTIONS}
     -Wall
     -Wno-format
-    -Wno-array-parameter
-    -Wno-return-type
+    # -Warray-parameter was introduced in GCC 11; older toolchains reject it.
+    $<$<VERSION_GREATER_EQUAL:${GCC_VERSION},11.0.0>:-Warray-parameter>
     -Wno-unused-but-set-variable
     -c
     -fdata-sections
@@ -195,13 +218,14 @@ add_compile_options(
     $<$<COMPILE_LANGUAGE:CXX>:-std=c++11>
     $<$<AND:$<COMPILE_LANGUAGE:C>,$<BOOL:${TFM_DEBUG_SYMBOLS}>>:-g>
     $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<BOOL:${TFM_DEBUG_SYMBOLS}>>:-g>
+    $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<BOOL:${TFM_DEBUG_OPTIMISATION}>,$<CONFIG:Debug>>:-Og>
     $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<BOOL:${CONFIG_TFM_WARNINGS_ARE_ERRORS}>>:-Werror>
 )
 
 add_link_options(
     --entry=Reset_Handler
-    -specs=nano.specs
-    -specs=nosys.specs
+    ${LIBC_LINK_OPTIONS}
+    -mthumb
     LINKER:-check-sections
     LINKER:-fatal-warnings
     LINKER:--gc-sections

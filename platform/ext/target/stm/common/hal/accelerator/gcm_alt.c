@@ -42,7 +42,7 @@ extern psa_status_t tfm_crypto_get_caller_id(int32_t *id);
 #define GCM_VALIDATE( cond ) do { } while(0)
 
 /* Private typedef -----------------------------------------------------------*/
-/* Private define ------------------------------------------------------------*/      
+/* Private define ------------------------------------------------------------*/
 #define ST_GCM_TIMEOUT    0xFFU  /* 255 ms timeout for the crypto processor */
 #define IV_LENGTH         12U    /* implementations restrict support to 96 bits */
 #if defined(GENERATOR_HW_CRYPTO_DPA_SUPPORTED)
@@ -100,7 +100,10 @@ void mbedtls_gcm_init( mbedtls_gcm_context *ctx )
     GCM_VALIDATE( ctx != NULL );
 
 #if defined(GENERATOR_HW_CRYPTO_DPA_SUPPORTED) && defined(HW_CRYPTO_DPA_GCM)
-   /* Enable SAES clock */
+#ifdef STM32U5
+    /* Enable SAES clock */
+    __HAL_RCC_SHSI_ENABLE();
+#endif
     __HAL_RCC_SAES_CLK_ENABLE();
 #endif
     memset( ctx, 0, sizeof( mbedtls_gcm_context ) );
@@ -257,6 +260,7 @@ int mbedtls_gcm_setkey( mbedtls_gcm_context *ctx,
     }
 #if defined(GENERATOR_HW_CRYPTO_DPA_SUPPORTED) && defined(HW_CRYPTO_DPA_GCM)
     /* Enable SAES clock */
+    __HAL_RCC_SHSI_ENABLE();
     __HAL_RCC_SAES_CLK_ENABLE();
 #else
     __HAL_RCC_AES_CLK_ENABLE();

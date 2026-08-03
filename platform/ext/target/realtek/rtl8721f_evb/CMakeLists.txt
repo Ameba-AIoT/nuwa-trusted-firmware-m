@@ -155,6 +155,7 @@ if(BL2)
         PRIVATE
             CONFIG_ARM_CORE_CM4
             CONFIG_ARM_CORE_CM4_KM4TZ
+            CONFIG_TRUSTZONE   # enable TrustZone MPC config path in BOOT_RAM_TZCfg
     )
 
     target_include_directories(platform_bl2
@@ -182,6 +183,7 @@ if(BL2)
             BLOCK_ERASE_DEFINE
             SECURE_KEY_PUB_ARRAY_NAME=${SECURE_KEY_PUB_ARRAY_NAME}
             NONSECURE_KEY_PUB_ARRAY_NAME=${NONSECURE_KEY_PUB_ARRAY_NAME}
+            CONFIG_TRUSTZONE   # enable TrustZone MPC config path in BOOT_RAM_TZCfg
     )
 
     target_include_directories(bl2
@@ -224,16 +226,24 @@ if(BL2)
 
             ${HAL_REALTEK_USRCFG_DIR}/ameba_bootcfg.c
             ${HAL_REALTEK_USRCFG_DIR}/ameba_flashcfg.c
+            # Provides strong-symbol mpc1_config/mpc2_config/mpc3_config to override
+            # the _WEAK stubs in lib_bootloader.a (requires --whole-archive below).
+            ${HAL_REALTEK_USRCFG_DIR}/ameba_boot_trustzonecfg.c
 
-            $<$<NOT:$<BOOL:${DEFAULT_MCUBOOT_SECURITY_COUNTERS}>>:${HAL_REALTEK_SOC_DIR}/loader/mcuboot/mcuboot_security_cnt.c>
-            $<$<NOT:$<BOOL:${DEFAULT_MCUBOOT_SECURITY_COUNTERS}>>:${HAL_REALTEK_SOC_DIR}/loader/mcuboot/ameba_security_counter_utils.c>
+            $<$<NOT:$<BOOL:${DEFAULT_MCUBOOT_SECURITY_COUNTERS}>>:${HAL_REALTEK_COMMON_DIR}/loader/mcuboot/mcuboot_security_cnt.c>
+            $<$<NOT:$<BOOL:${DEFAULT_MCUBOOT_SECURITY_COUNTERS}>>:${HAL_REALTEK_COMMON_DIR}/loader/mcuboot/ameba_security_counter_utils.c>
     )
 
     target_link_libraries(bl2
         PUBLIC
             -T${HAL_REALTEK_PRJ_DIR}/ld/ameba_rom_symbol_bcut_s.ld
             ${HAL_REALTEK_LIB_DIR}/lib_chipinfo.a
+            # Use --whole-archive so that weak symbols in lib_bootloader.a
+            # (mpc1_config, mpc2_config, mpc3_config) can be overridden by the
+            # strong definitions in ameba_boot_trustzonecfg.c.
+            -Wl,--whole-archive
             ${HAL_REALTEK_LIB_DIR}/lib_bootloader.a
+            -Wl,--no-whole-archive
     )
     target_add_scatter_file(bl2
             $<$<C_COMPILER_ID:GNU>:${CMAKE_CURRENT_SOURCE_DIR}/ld/tfm_common_bl2.ld>
@@ -333,22 +343,22 @@ if(BL2)
             ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py
         COMMAND ${CMAKE_NM} ${BIN_DIR}/bl2.axf | sort > ${BIN_DIR}/bl2.raw.map
         COMMAND ${CMAKE_OBJDUMP} -d ${BIN_DIR}/bl2.axf > ${BIN_DIR}/bl2.asm
-        COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
+        COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
                 -i ${BIN_DIR}/bl2.bin
                 -o ${BIN_DIR}/xip_boot.bin  # prepend_header need this name
                 -l 32
-        COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+        COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
                 -o ${BIN_DIR}/xip_boot_prepend.bin
                 -i ${BIN_DIR}/xip_boot.bin
                 -s __km4tz_boot_text_start__ -m ${BIN_DIR}/bl2.raw.map
                 --boot-index 0x01010101
-        COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+        COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
                 -o ${BIN_DIR}/ram_1_prepend.bin
                 -i ${BIN_DIR}/ram_1.bin
                 -s __km4tz_boot_text_start__ -m ${BIN_DIR}/bl2.raw.map
         COMMAND ${CMAKE_COMMAND} -E cat ${BIN_DIR}/xip_boot_prepend.bin ${BIN_DIR}/ram_1_prepend.bin
                 > ${BIN_DIR}/boot.bin
-        COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py
+        COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py
                 --post-build-dir ${CMAKE_BINARY_DIR}/amebagreen2_gcc_project
                 fw_pack
                 -o ${BIN_DIR}/${TARGET_SOC}_boot.bin
@@ -400,16 +410,16 @@ else()
         COMMAND ${CMAKE_OBJCOPY} -j .TFM_VECTORS
                 -Obinary ${BIN_DIR}/target_pure_tfm.axf ${BIN_DIR}/ram_3_s.bin
         COMMAND ${CMAKE_COMMAND} -E copy ${BIN_DIR}/tfm_s.bin ${BIN_DIR}/xip_3_s.bin
-        COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
+        COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
                 -i ${BIN_DIR}/ram_3_s.bin -l 32
-        COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
+        COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
                 -i ${BIN_DIR}/xip_3_s.bin -l 32
 
-        COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+        COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
                 -o ${BIN_DIR}/ram_3_s_prepend.bin
                 -i ${BIN_DIR}/ram_3_s.bin
                 -s __vectors_start__ -m ${BIN_DIR}/tfm_s.raw.map
-        COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+        COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
                 -o ${BIN_DIR}/xip_3_s_prepend.bin
                 -i ${BIN_DIR}/xip_3_s.bin
                 -s Image$$PT_RO_START$$Base -m ${BIN_DIR}/tfm_s.raw.map

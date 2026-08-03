@@ -101,10 +101,19 @@
 
 #define S_DATA_START    (S_RAM_ALIAS(0x0))
 
-#if !defined(TFM_NS_REG_TEST) && !defined(TFM_S_REG_TEST)
-#define S_DATA_SIZE     (60 * 1024)
-#else
+/* S secure RAM size:
+ *  - 96 KB  default (non-regression); covers standard partitions + IAT +
+ *           custom partitions. Change 8964 (BL2 support) added ~10 KB S-side
+ *           BSS when IAT is enabled; any extra partition also consumes S RAM.
+ *           96 KB gives sufficient headroom for all non-regression use cases.
+ *  - 140 KB regression test (TFM_S_REG_TEST / TFM_NS_REG_TEST)
+ * NOTE: NS_RAM_ALIAS_BASE in flash_layout.h must be kept in sync:
+ *       NS_RAM_ALIAS_BASE = S_RAM_ALIAS_BASE + S_DATA_SIZE + 0x20
+ */
+#if defined(TFM_NS_REG_TEST) || defined(TFM_S_REG_TEST)
 #define S_DATA_SIZE     (140 * 1024)
+#else
+#define S_DATA_SIZE     (96 * 1024)
 #endif
 
 #define S_DATA_LIMIT    (S_DATA_START + S_DATA_SIZE - 1)

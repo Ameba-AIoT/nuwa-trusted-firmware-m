@@ -28,6 +28,7 @@ set(INSTALL_CONFIG_DIR                  ${CMAKE_INSTALL_PREFIX}/config)
 set(INSTALL_PLATFORM_NS_DIR             ${CMAKE_INSTALL_PREFIX}/platform)
 
 set(TFM_DEBUG_SYMBOLS                   ON          CACHE BOOL      "Add debug symbols. Note that setting CMAKE_BUILD_TYPE to Debug or RelWithDebInfo will also add debug symbols.")
+set(TFM_DEBUG_OPTIMISATION              OFF         CACHE BOOL      "Add basic -Og optimisation when CMAKE_BUILD_TYPE is Debug. Note that non Debug builds specify their own optimisation")
 set(TFM_CODE_COVERAGE                   OFF         CACHE BOOL      "Whether to build the binary for lcov tools")
 
 set(TFM_TESTS_REVISION_CHECKS           ON          CACHE BOOL      "Whether to perform checks on the tf-m-tests repository revision.")
@@ -37,7 +38,7 @@ set(PROJECT_CONFIG_HEADER_FILE          ""          CACHE FILEPATH  "User define
 # External libraries source and version
 set(MBEDCRYPTO_PATH                     "DOWNLOAD"  CACHE PATH      "Path to Mbed Crypto (or DOWNLOAD to fetch automatically")
 set(MBEDCRYPTO_FORCE_PATCH              OFF         CACHE BOOL      "Always apply MBed Crypto patches")
-set(MBEDCRYPTO_VERSION                  "mbedtls-3.6.3" CACHE STRING "The version of Mbed Crypto to use")
+set(MBEDCRYPTO_VERSION                  "mbedtls-3.6.5" CACHE STRING "The version of Mbed Crypto to use")
 set(MBEDCRYPTO_GIT_REMOTE               "https://github.com/Mbed-TLS/mbedtls.git" CACHE STRING "The URL (or path) to retrieve MbedTLS from.")
 
 set(MCUBOOT_PATH                        "DOWNLOAD"  CACHE PATH      "Path to MCUboot (or DOWNLOAD to fetch automatically")
@@ -129,6 +130,7 @@ set(PLATFORM_DEFAULT_IMAGE_SIGNING      ON          CACHE BOOL      "Use default
 set(PLATFORM_DEFAULT_PROV_LINKER_SCRIPT ON          CACHE BOOL      "Use default provisioning linker script")
 
 set(TFM_DUMMY_PROVISIONING              ON          CACHE BOOL      "Provision with dummy values. NOT to be used in production")
+set(PROFILE_DEFINITION_LARGE            OFF         CACHE BOOL      "Use the 48 byte 'profile_definition' declaration used between v2.2.0 and v2.2.2")
 
 set(BL2_HEADER_SIZE                     0x000       CACHE STRING    "BL2 Header size")
 set(BL2_TRAILER_SIZE                    0x000       CACHE STRING    "BL2 Trailer size")
@@ -167,6 +169,8 @@ to the include path of Mbed TLS.")
 set(TFM_MBEDCRYPTO_CONFIG_CLIENT_PATH         "${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/tfm_mbedcrypto_config_client.h" CACHE PATH "Bare minimum config required on the client side.")
 set(TFM_MBEDCRYPTO_PSA_CRYPTO_CONFIG_PATH     "${CMAKE_SOURCE_DIR}/lib/ext/mbedcrypto/mbedcrypto_config/crypto_config_default.h" CACHE PATH "Config to use PSA Crypto setting for Mbed Crypto.")
 set(TFM_MBEDCRYPTO_PLATFORM_EXTRA_CONFIG_PATH ""    CACHE PATH      "Config to append to standard Mbed Crypto config, used by platforms to configure feature support")
+
+set(TFM_INSTALL_MBEDTLS_HEADERS    OFF         CACHE BOOL      "Install Mbed TLS include files to interface directory")
 
 ########################## TF-M performance ####################################
 

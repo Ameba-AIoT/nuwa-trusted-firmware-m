@@ -138,26 +138,26 @@ add_custom_command(
             > ${CMAKE_BINARY_DIR}/bin/xip_2_ns_bl2.bin
 
     # 5. Pad 32 bytes for alignment (for non-BL2 Realtek format use)
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
+    COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
             -i ${CMAKE_BINARY_DIR}/bin/xip_2_ns.bin -l 32
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
+    COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
             -i ${CMAKE_BINARY_DIR}/bin/ram_2_ns.bin -l 32
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
+    COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
             -i ${CMAKE_BINARY_DIR}/bin/psram_2_ns.bin -l 32
 
     # 6. Prepend headers (Using your custom symbols)
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+    COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
             -o ${CMAKE_BINARY_DIR}/bin/xip_2_ns_prepend.bin
             -i ${CMAKE_BINARY_DIR}/bin/xip_2_ns.bin
             -s Image$$NS_CODE_START$$Base -m ${CMAKE_BINARY_DIR}/bin/tfm_ns.raw.map
 
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+    COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
             -o ${CMAKE_BINARY_DIR}/bin/ram_2_ns_prepend.bin
             -i ${CMAKE_BINARY_DIR}/bin/ram_2_ns.bin
             -s Image$$NS_DATA_START$$Base -m ${CMAKE_BINARY_DIR}/bin/tfm_ns.raw.map
 
     # PSRAM Header: Replace '__psram_start__' with your actual symbol from tfm_ns.raw.map
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+    COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
             -o ${CMAKE_BINARY_DIR}/bin/psram_2_ns_prepend.bin
             -i ${CMAKE_BINARY_DIR}/bin/psram_2_ns.bin
             -s Image$$NS_CODE_START$$Base -m ${CMAKE_BINARY_DIR}/bin/tfm_ns.raw.map

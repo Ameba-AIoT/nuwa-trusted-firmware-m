@@ -25,13 +25,13 @@ extern __NO_RETURN void __PROGRAM_START(void);
  *----------------------------------------------------------------------------*/
 __NO_RETURN void Reset_Handler (void);
 
+typedef void (*VECTOR_TABLE_Type)(void);
 #ifdef BL2
 /* BL2 needs a proper ARM Cortex-M vector table:
  * [0] = Initial MSP value
  * [1] = Reset_Handler address
  * bl2_main.c reads vt->reset from index [1]; without this,
  * TFMEntryFun[1]=NULL causes vt->reset=0 and boot fails. */
-typedef void (*VECTOR_TABLE_Type)(void);
 const VECTOR_TABLE_Type __VECTOR_TABLE[] __VECTOR_TABLE_ATTRIBUTE = {
     (VECTOR_TABLE_Type)(&__INITIAL_SP),
     Reset_Handler,
@@ -41,6 +41,16 @@ RAM_START_FUNCTION TFMEntryFun __VECTOR_TABLE_ATTRIBUTE = {
     Reset_Handler,
     NULL,
     (uint32_t)0
+};
+/* Minimal [MSP, Reset] flash vector table at the NS image start (section
+ * .ns_boot_vectors). The secure->NS jump reads MSP/entry from here
+ * (NS_AP_LOGIC_BASE + 0x400); without it the jump reads code bytes as MSP and
+ * double-faults. The amebadplus NS otherwise keeps runtime vectors in RAM
+ * (NewVectorTable), which BL2 never populates. */
+const VECTOR_TABLE_Type __ns_boot_vector_table[]
+    __attribute__((section(".ns_boot_vectors"), used)) = {
+    (VECTOR_TABLE_Type)(&__INITIAL_SP),
+    Reset_Handler,
 };
 #endif
 
@@ -106,6 +116,22 @@ void Reset_Handler(void)
     SCB->VTOR = (uint32_t)NewVectorTable;
     __DSB();
     __ISB();
+
+    /* Clear NVIC enable/pending inherited from Secure: NewVectorTable only holds
+     * the system handlers, so a stray NS IRQ after unmask would vector to an
+     * unset entry and HardFault before main. */
+    for (uint32_t i = 0U; i < sizeof(NVIC->ICER) / sizeof(NVIC->ICER[0]); i++) {
+        NVIC->ICER[i] = 0xFFFFFFFFUL;
+        NVIC->ICPR[i] = 0xFFFFFFFFUL;
+    }
+    /* Stop/de-pend SysTick too; osKernelStart reconfigures it. */
+    SysTick->CTRL = 0UL;
+    SCB->ICSR = SCB_ICSR_PENDSTCLR_Msk;
+    __DSB();
+    __ISB();
+
+    /* Unmask PRIMASK_NS (Secure masked it for the handoff) now VTOR is set. */
+    __enable_irq();
 #endif
 
     SystemInit();                             /* CMSIS System Initialization */

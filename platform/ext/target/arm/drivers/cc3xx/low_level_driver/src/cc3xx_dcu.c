@@ -1,15 +1,26 @@
 /*
- * Copyright (c) 2024, The TrustedFirmware-M Contributors. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright The TrustedFirmware-M Contributors
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
 
-#include "cc3xx_dcu.h"
-#include "cc3xx_dev.h"
+#ifndef CC3XX_CONFIG_FILE
+#include "cc3xx_config.h"
+#else
+#include CC3XX_CONFIG_FILE
+#endif
+
 #include <assert.h>
 #include <string.h>
 
+#include "cc3xx_dcu.h"
+#include "cc3xx_dev.h"
+
+/* FixMe: Remove this when CC3XX_INFO logging gets sorted */
+#define CC3XX_INFO(...)
+
+#ifdef CC3XX_CONFIG_DCU_ICV_RESTRICTION_MASK_CHECK
 /**
  * @brief Check that the requested permissions are in accordance with the
  *        hardware restriction mask
@@ -17,12 +28,45 @@
  * @param[in] val Sets of permissions, i.e. host_dcu_en to check as an array of 4 words
  * @return cc3xx_err_t CC3XX_ERR_SUCCESS or CC3XX_ERR_DCU_MASK_MISMATCH
  */
-static cc3xx_err_t check_dcu_restriction_mask(const uint32_t *val)
+static cc3xx_err_t check_dcu_icv_restriction_mask(const uint32_t *val)
 {
     size_t idx;
 
+    CC3XX_INFO("icv_dcu_restriction_mask: 0x%08x_%08x_%08x_%08x\r\n",
+               P_CC3XX->ao.ao_icv_dcu_restriction_mask[0],
+               P_CC3XX->ao.ao_icv_dcu_restriction_mask[1],
+               P_CC3XX->ao.ao_icv_dcu_restriction_mask[2],
+               P_CC3XX->ao.ao_icv_dcu_restriction_mask[3]);
+
     for (idx = 0; idx < sizeof(P_CC3XX->ao.ao_icv_dcu_restriction_mask) / sizeof(uint32_t); idx++) {
         if (val[idx] & ~P_CC3XX->ao.ao_icv_dcu_restriction_mask[idx]) {
+            return CC3XX_ERR_DCU_MASK_MISMATCH;
+        }
+    }
+
+    return CC3XX_ERR_SUCCESS;
+}
+#endif /* CC3XX_CONFIG_DCU_ICV_RESTRICTION_MASK_CHECK */
+
+/**
+ * @brief Check that the requested permissions are in accordance with the
+ *        permanent disable mask. A 1 in the mask means disabled
+ *
+ * @param[in] val Sets of permissions, i.e. host_dcu_en to check as an array of 4 words
+ * @return cc3xx_err_t CC3XX_ERR_SUCCESS or CC3XX_ERR_DCU_MASK_MISMATCH
+ */
+static cc3xx_err_t check_dcu_permanent_disable_mask(const uint32_t *val)
+{
+    size_t idx;
+
+    CC3XX_INFO("permanent_disable_mask: 0x%08x_%08x_%08x_%08x\r\n",
+               P_CC3XX->ao.ao_permanent_disable_mask[0],
+               P_CC3XX->ao.ao_permanent_disable_mask[1],
+               P_CC3XX->ao.ao_permanent_disable_mask[2],
+               P_CC3XX->ao.ao_permanent_disable_mask[3]);
+
+    for (idx = 0; idx < sizeof(P_CC3XX->ao.ao_permanent_disable_mask) / sizeof(uint32_t); idx++) {
+        if (val[idx] & P_CC3XX->ao.ao_permanent_disable_mask[idx]) {
             return CC3XX_ERR_DCU_MASK_MISMATCH;
         }
     }
@@ -41,6 +85,18 @@ static cc3xx_err_t check_dcu_locks(const uint32_t *val)
 {
     size_t idx;
     uint32_t dcu_has_to_change;
+
+    CC3XX_INFO("Current host_dcu_en: 0x%08x_%08x_%08x_%08x\r\n",
+               P_CC3XX->ao.host_dcu_en[0],
+               P_CC3XX->ao.host_dcu_en[1],
+               P_CC3XX->ao.host_dcu_en[2],
+               P_CC3XX->ao.host_dcu_en[3]);
+
+    CC3XX_INFO("host_dcu_lock: 0x%08x_%08x_%08x_%08x\r\n",
+               P_CC3XX->ao.host_dcu_lock[0],
+               P_CC3XX->ao.host_dcu_lock[1],
+               P_CC3XX->ao.host_dcu_lock[2],
+               P_CC3XX->ao.host_dcu_lock[3]);
 
     for (idx = 0; idx < sizeof(P_CC3XX->ao.host_dcu_en) / sizeof(uint32_t); idx++) {
         /* Check if the host_dcu_en has to change */
@@ -123,11 +179,25 @@ cc3xx_err_t cc3xx_dcu_set_enabled(const uint8_t *permissions_mask, size_t len)
         dcu_en_requested[idx] = *((uint32_t *)(permissions_mask + (idx*sizeof(uint32_t))));
     }
 
-    /* Check the restriction mask for the dcu_en*/
-    err = check_dcu_restriction_mask(dcu_en_requested);
+    CC3XX_INFO("Requested host_dcu_en: 0x%08x_%08x_%08x_%08x\r\n",
+               dcu_en_requested[0],
+               dcu_en_requested[1],
+               dcu_en_requested[2],
+               dcu_en_requested[3]);
+
+    /* Check the permanent disable mask for the dcu_en */
+    err = check_dcu_permanent_disable_mask(dcu_en_requested);
     if (err != CC3XX_ERR_SUCCESS) {
         return err;
     }
+
+#ifdef CC3XX_CONFIG_DCU_ICV_RESTRICTION_MASK_CHECK
+    /* Check the ICV restriction mask for the dcu_en */
+    err = check_dcu_icv_restriction_mask(dcu_en_requested);
+    if (err != CC3XX_ERR_SUCCESS) {
+        return err;
+    }
+#endif /* CC3XX_CONFIG_DCU_ICV_RESTRICTION_MASK_CHECK */
 
     /* Check if any dcu_lock has been locked for the corresponding dcu_en */
     err = check_dcu_locks(dcu_en_requested);
@@ -138,6 +208,8 @@ cc3xx_err_t cc3xx_dcu_set_enabled(const uint8_t *permissions_mask, size_t len)
     for (idx = 0; idx < sizeof(P_CC3XX->ao.host_dcu_en) / sizeof(uint32_t); idx++) {
         P_CC3XX->ao.host_dcu_en[idx] = dcu_en_requested[idx];
     }
+
+    CC3XX_INFO("Requested host_dcu_en applied successfully\r\n");
 
     return CC3XX_ERR_SUCCESS;
 }

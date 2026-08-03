@@ -1,4 +1,4 @@
-From be4c9dfe3429d7f8420b896614cd15bd04d85868 Mon Sep 17 00:00:00 2001
+From 4e906c2f061062f6068515bae3a5e75db2da32e3 Mon Sep 17 00:00:00 2001
 From: Antonio de Angelis <Antonio.deAngelis@arm.com>
 Date: Thu, 21 Mar 2024 11:44:56 +0000
 Subject: [PATCH 1/7] Add TF-M Builtin Key Loader driver entry points
@@ -18,13 +18,13 @@ Co-authored-by: Antonio de Angelis <antonio.deangelis@arm.com>
  3 files changed, 143 insertions(+), 9 deletions(-)
 
 diff --git a/library/psa_crypto.c b/library/psa_crypto.c
-index 3ec92cc06..5c05acac4 100644
+index 9e17e27f2..7206bf588 100644
 --- a/library/psa_crypto.c
 +++ b/library/psa_crypto.c
-@@ -73,6 +73,10 @@
- #include "mbedtls/psa_util.h"
- #include "mbedtls/threading.h"
- 
+@@ -75,6 +75,10 @@
+
+ #include "constant_time_internal.h"
+
 +#if defined(PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER)
 +#include "tfm_builtin_key_loader.h"
 +#endif /* PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER */
@@ -32,10 +32,10 @@ index 3ec92cc06..5c05acac4 100644
  #if defined(MBEDTLS_PSA_BUILTIN_ALG_HKDF) ||          \
      defined(MBEDTLS_PSA_BUILTIN_ALG_HKDF_EXTRACT) ||  \
      defined(MBEDTLS_PSA_BUILTIN_ALG_HKDF_EXPAND)
-@@ -1172,7 +1176,11 @@ static psa_status_t psa_get_and_lock_transparent_key_slot_with_policy(
+@@ -1174,7 +1178,11 @@ static psa_status_t psa_get_and_lock_transparent_key_slot_with_policy(
          return status;
      }
- 
+
 -    if (psa_key_lifetime_is_external((*p_slot)->attr.lifetime)) {
 +    if (psa_key_lifetime_is_external((*p_slot)->attr.lifetime)
 +#if defined(PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER)
@@ -50,9 +50,9 @@ index 0ed221b50..17b129a02 100644
 --- a/library/psa_crypto_driver_wrappers.h
 +++ b/library/psa_crypto_driver_wrappers.h
 @@ -42,16 +42,32 @@
- 
+
  #endif
- 
+
 +/* Include TF-M builtin key driver */
 +#if defined(PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER)
 +#ifndef PSA_CRYPTO_DRIVER_PRESENT
@@ -65,7 +65,7 @@ index 0ed221b50..17b129a02 100644
 +#endif /* PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER */
 +
  /* END-driver headers */
- 
+
  /* Auto-generated values depending on which drivers are registered.
   * ID 0 is reserved for unallocated operations.
   * ID 1 is reserved for the Mbed TLS software driver. */
@@ -83,13 +83,13 @@ index 0ed221b50..17b129a02 100644
 +    PSA_CRYPTO_TFM_BUILTIN_KEY_LOADER_DRIVER_ID,
 +#endif /* PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER */
 +};
- 
+
  /* END-driver id */
- 
+
 @@ -73,6 +89,12 @@ static inline psa_status_t psa_driver_wrapper_init( void )
  {
      psa_status_t status = PSA_ERROR_CORRUPTION_DETECTED;
- 
+
 +#if defined(PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER)
 +    status = tfm_builtin_key_loader_init();
 +    if (status != PSA_SUCCESS)
@@ -148,7 +148,7 @@ index 0ed221b50..17b129a02 100644
 +#endif /* PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER */
              /* Key is stored in the slot in export representation, so
               * cycle through all known transparent accelerators */
- 
+
 @@ -611,6 +648,9 @@ static inline psa_status_t psa_driver_wrapper_verify_hash_start(
      switch( location )
      {
@@ -158,7 +158,7 @@ index 0ed221b50..17b129a02 100644
 +#endif /* PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER */
              /* Key is stored in the slot in export representation, so
               * cycle through all known transparent accelerators */
- 
+
 @@ -774,6 +814,9 @@ static inline psa_status_t psa_driver_wrapper_generate_key(
      switch( location )
      {
@@ -238,7 +238,7 @@ index 0ed221b50..17b129a02 100644
 +#endif /* PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER */
              /* Key is stored in the slot in export representation, so
               * cycle through all known transparent accelerators */
- 
+
 @@ -1777,6 +1841,9 @@ static inline psa_status_t psa_driver_wrapper_aead_decrypt(
      switch( location )
      {
@@ -248,7 +248,7 @@ index 0ed221b50..17b129a02 100644
 +#endif /* PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER */
              /* Key is stored in the slot in export representation, so
               * cycle through all known transparent accelerators */
- 
+
 @@ -1826,6 +1893,9 @@ static inline psa_status_t psa_driver_wrapper_aead_encrypt_setup(
      switch( location )
      {
@@ -258,7 +258,7 @@ index 0ed221b50..17b129a02 100644
 +#endif /* PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER */
              /* Key is stored in the slot in export representation, so
               * cycle through all known transparent accelerators */
- 
+
 @@ -1874,6 +1944,9 @@ static inline psa_status_t psa_driver_wrapper_aead_decrypt_setup(
      switch( location )
      {
@@ -268,7 +268,7 @@ index 0ed221b50..17b129a02 100644
 +#endif /* PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER */
              /* Key is stored in the slot in export representation, so
               * cycle through all known transparent accelerators */
- 
+
 @@ -2210,6 +2283,9 @@ static inline psa_status_t psa_driver_wrapper_mac_compute(
      switch( location )
      {
@@ -344,9 +344,9 @@ index de8a5269b..436a650fc 100644
 --- a/library/psa_crypto_driver_wrappers_no_static.c
 +++ b/library/psa_crypto_driver_wrappers_no_static.c
 @@ -41,16 +41,32 @@
- 
+
  #endif
- 
+
 +/* Include TF-M builtin key driver */
 +#if defined(PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER)
 +#ifndef PSA_CRYPTO_DRIVER_PRESENT
@@ -359,7 +359,7 @@ index de8a5269b..436a650fc 100644
 +#endif /* PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER */
 +
  /* END-driver headers */
- 
+
  /* Auto-generated values depending on which drivers are registered.
   * ID 0 is reserved for unallocated operations.
   * ID 1 is reserved for the Mbed TLS software driver. */
@@ -377,13 +377,13 @@ index de8a5269b..436a650fc 100644
 +    PSA_CRYPTO_TFM_BUILTIN_KEY_LOADER_DRIVER_ID,
 +#endif /* PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER */
 +};
- 
+
  /* END-driver id */
- 
+
 @@ -112,6 +128,12 @@ psa_status_t psa_driver_wrapper_get_key_buffer_size(
                      PSA_SUCCESS : PSA_ERROR_NOT_SUPPORTED );
  #endif /* PSA_CRYPTO_DRIVER_TEST */
- 
+
 +#if defined(PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER)
 +        case TFM_BUILTIN_KEY_LOADER_KEY_LOCATION:
 +            return tfm_builtin_key_loader_get_key_buffer_size(psa_get_key_id(attributes),
@@ -406,7 +406,7 @@ index de8a5269b..436a650fc 100644
 @@ -241,6 +266,13 @@ psa_status_t psa_driver_wrapper_get_builtin_key(
          ));
  #endif
- 
+
 +#if defined(PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER)
 +        case TFM_BUILTIN_KEY_LOADER_KEY_LOCATION:
 +            return( tfm_builtin_key_loader_get_builtin_key(
@@ -414,9 +414,9 @@ index de8a5269b..436a650fc 100644
 +                        attributes,
 +                        key_buffer, key_buffer_size, key_buffer_length ) );
 +#endif /* PSA_CRYPTO_DRIVER_TFM_BUILTIN_KEY_LOADER */
- 
+
  #endif /* PSA_CRYPTO_ACCELERATOR_DRIVER_PRESENT */
          default:
--- 
+--
 2.34.1
 

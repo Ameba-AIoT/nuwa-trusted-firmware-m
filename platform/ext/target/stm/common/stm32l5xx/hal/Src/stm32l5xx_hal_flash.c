@@ -231,7 +231,7 @@ HAL_StatusTypeDef HAL_FLASH_Program_IT(uint32_t TypeProgram, uint32_t Address, u
     /* Set internal variables used by the IRQ handler */
     pFlash.ProcedureOnGoing = TypeProgram;
     pFlash.Address = Address;
-    
+
     /* Access to SECCR or NSCR depends on operation type */
     reg_cr = IS_FLASH_SECURE_OPERATION() ? &(FLASH->SECCR) : &(FLASH_NS->NSCR);
 
@@ -411,76 +411,132 @@ __weak void HAL_FLASH_OperationErrorCallback(uint32_t ReturnValue)
   */
 
 /**
-  * @brief  Unlock the FLASH control register access.
+  * @brief  Unlock the non-secure FLASH control registers access
+  * @retval HAL Status
+  */
+HAL_StatusTypeDef HAL_FLASH_Unlock_NS(void)
+{
+  HAL_StatusTypeDef status = HAL_ERROR;
+
+  if (READ_BIT(FLASH->NSCR, FLASH_NSCR_NSLOCK) != 0U)
+  {
+    /* Authorize the FLASH Control Register access */
+    WRITE_REG(FLASH->NSKEYR, FLASH_KEY1);
+    WRITE_REG(FLASH->NSKEYR, FLASH_KEY2);
+
+    /* Verify Flash CR is unlocked */
+    if (READ_BIT(FLASH->NSCR, FLASH_NSCR_NSLOCK) == 0U)
+    {
+      status = HAL_OK;
+    }
+  }
+
+  return status;
+}
+
+/**
+  * @brief  Unlock the secure FLASH control registers access
+  * @retval HAL Status
+  */
+HAL_StatusTypeDef HAL_FLASH_Unlock_SEC(void)
+{
+  HAL_StatusTypeDef status = HAL_ERROR;
+
+#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
+  if (READ_BIT(FLASH->SECCR, FLASH_SECCR_SECLOCK) != 0U)
+  {
+    /* Authorize the FLASH Control Register access */
+    WRITE_REG(FLASH->SECKEYR, FLASH_KEY1);
+    WRITE_REG(FLASH->SECKEYR, FLASH_KEY2);
+
+    /* verify Flash CR is unlocked */
+    if (READ_BIT(FLASH->SECCR, FLASH_SECCR_SECLOCK) == 0U)
+    {
+      status = HAL_OK;
+    }
+  }
+#endif /* __ARM_FEATURE_CMSE && __ARM_FEATURE_CMSE == 3U */
+
+  return status;
+}
+
+/**
+  * @brief  Unlock the FLASH control registers access
   * @retval HAL Status
   */
 HAL_StatusTypeDef HAL_FLASH_Unlock(void)
 {
   HAL_StatusTypeDef status = HAL_OK;
 
-  if(READ_BIT(FLASH->NSCR, FLASH_NSCR_NSLOCK) != 0u)
-  {
-    /* Authorize the FLASH Registers access */
-    WRITE_REG(FLASH->NSKEYR, FLASH_KEY1);
-    WRITE_REG(FLASH->NSKEYR, FLASH_KEY2);
-
-    /* verify Flash is unlocked */
-    if (READ_BIT(FLASH->NSCR, FLASH_NSCR_NSLOCK) != 0u)
-    {
-      status = HAL_ERROR;
-    }
-  }
+  status = HAL_FLASH_Unlock_NS();
 
 #if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
-  if (status == HAL_OK)
-  {
-    if(READ_BIT(FLASH->SECCR, FLASH_SECCR_SECLOCK) != 0u)
-    {
-      /* Authorize the FLASH Registers access */
-      WRITE_REG(FLASH->SECKEYR, FLASH_KEY1);
-      WRITE_REG(FLASH->SECKEYR, FLASH_KEY2);
-
-      /* verify Flash is unlocked */
-      if (READ_BIT(FLASH->SECCR, FLASH_SECCR_SECLOCK) != 0u)
-      {
-        status = HAL_ERROR;
-      }
-    }
+  if (status == HAL_OK) {
+    status = HAL_FLASH_Unlock_SEC();
   }
-#endif
+#endif /* __ARM_FEATURE_CMSE && __ARM_FEATURE_CMSE == 3U */
 
   return status;
 }
 
 /**
-  * @brief  Lock the FLASH control register access.
+  * @brief  Locks the non-secure FLASH control registers access
   * @retval HAL Status
   */
-HAL_StatusTypeDef HAL_FLASH_Lock(void)
+HAL_StatusTypeDef HAL_FLASH_Lock_NS(void)
 {
   HAL_StatusTypeDef status = HAL_ERROR;
 
-  /* Set the LOCK Bit to lock the FLASH Registers access */
+  /* Set the LOCK Bit to lock the FLASH Control Register access */
   SET_BIT(FLASH->NSCR, FLASH_NSCR_NSLOCK);
 
-  /* verify Flash is locked */
-  if (READ_BIT(FLASH->NSCR, FLASH_NSCR_NSLOCK) != 0u)
+  /* Verify Flash is locked */
+  if (READ_BIT(FLASH->NSCR, FLASH_NSCR_NSLOCK) != 0U)
   {
     status = HAL_OK;
   }
 
-#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
-  if (status == HAL_OK)
-  {
-    SET_BIT(FLASH->SECCR, FLASH_SECCR_SECLOCK);
+  return status;
+}
 
-    /* verify Flash is locked */
-    if (READ_BIT(FLASH->SECCR, FLASH_SECCR_SECLOCK) != 0u)
-    {
-      status = HAL_OK;
-    }
+
+/**
+  * @brief  Locks the secure FLASH control registers access
+  * @retval HAL Status
+  */
+HAL_StatusTypeDef HAL_FLASH_Lock_SEC(void)
+{
+  HAL_StatusTypeDef status = HAL_ERROR;
+
+#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
+  /* Set the LOCK Bit to lock the FLASH Control Register access */
+  SET_BIT(FLASH->SECCR, FLASH_SECCR_SECLOCK);
+
+  /* verify Flash is locked */
+  if (READ_BIT(FLASH->SECCR, FLASH_SECCR_SECLOCK) != 0U)
+  {
+    status = HAL_OK;
   }
-#endif
+#endif /* __ARM_FEATURE_CMSE && __ARM_FEATURE_CMSE == 3U */
+
+  return status;
+}
+
+/**
+  * @brief  Locks the FLASH control registers access
+  * @retval HAL Status
+  */
+HAL_StatusTypeDef HAL_FLASH_Lock(void)
+{
+  HAL_StatusTypeDef status = HAL_OK;
+
+  status = HAL_FLASH_Lock_NS();
+
+#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
+  if (status == HAL_OK) {
+    status = HAL_FLASH_Lock_SEC();
+  }
+#endif /* __ARM_FEATURE_CMSE && __ARM_FEATURE_CMSE == 3U */
 
   return status;
 }
@@ -613,7 +669,7 @@ HAL_StatusTypeDef FLASH_WaitForLastOperation(uint32_t Timeout)
       }
     }
   }
-  
+
   /* Access to SECSR or NSSR registers depends on operation type */
   reg_sr = IS_FLASH_SECURE_OPERATION() ? &(FLASH->SECSR) : &(FLASH_NS->NSSR);
 
@@ -621,7 +677,7 @@ HAL_StatusTypeDef FLASH_WaitForLastOperation(uint32_t Timeout)
   error = ((*reg_sr) & FLASH_FLAG_SR_ERRORS);
 #if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
   error |= (FLASH->NSSR & FLASH_FLAG_OPTWERR);
-#endif /* __ARM_FEATURE_CMSE */ 
+#endif /* __ARM_FEATURE_CMSE */
 
   if(error != 0u)
   {
@@ -663,7 +719,7 @@ static void FLASH_Program_DoubleWord(uint32_t Address, uint64_t Data)
   __IO uint32_t *reg;
   /* Check the parameters */
   assert_param(IS_FLASH_PROGRAM_ADDRESS(Address));
-  
+
   /* Access to SECCR or NSCR registers depends on operation type */
   reg = IS_FLASH_SECURE_OPERATION() ? &(FLASH->SECCR) : &(FLASH_NS->NSCR);
 

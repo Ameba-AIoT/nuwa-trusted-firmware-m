@@ -12,3 +12,5 @@ set(TFM_SYSTEM_PROCESSOR cortex-m55)
 set(TFM_SYSTEM_ARCHITECTURE armv8.1-m.main)
 set(TFM_SYSTEM_DSP OFF)
 set(CONFIG_TFM_FLOAT_ABI "soft")
+# RTK toolchain ships with newlib-nano, not picolibc
+set(CONFIG_PICOLIBC FALSE)

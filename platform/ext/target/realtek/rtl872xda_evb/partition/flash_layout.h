@@ -74,7 +74,7 @@
 /* Executable RAM range for MCUBoot MCUBOOT_RAM_LOAD validation.
  * Must cover the S image VMA range [S_RAM_ALIAS_BASE, S_RAM_ALIAS_BASE + S_DATA_SIZE). */
 #define IMAGE_EXECUTABLE_RAM_START      (S_RAM_ALIAS_BASE)
-#define IMAGE_EXECUTABLE_RAM_SIZE       (0x2B000)  /* S_DATA_SIZE = 172KB */
+#define IMAGE_EXECUTABLE_RAM_SIZE       (0x30000)  /* S_DATA_SIZE = 192KB */
 #else
 #define FLASH_BASE_ADDRESS              (0x08000000)
 #endif
@@ -226,10 +226,13 @@
 // #define S_RAM_ALIAS_BASE  (0x2000C000)  /* Secure SRAM base */
 #define S_RAM_ALIAS_BASE  (0x2000B020)  /* Secure SRAM base */
 
+/* NS_RAM_ALIAS_BASE = S_RAM_ALIAS_BASE + S_DATA_SIZE + 0x20 (Ameba NS header gap).
+ * S=192 KB: 0x2000B020 + 0x30000 + 0x20 = 0x2003B040, NS=179.9 KB
+ * S=256 KB: 0x2000B020 + 0x40000 + 0x20 = 0x2004B040, NS=115.9 KB */
 #if !defined(TFM_NS_REG_TEST) && !defined(TFM_S_REG_TEST)
-#define NS_RAM_ALIAS_BASE (0x20037020)  /* Non-Secure SRAM base */
+#define NS_RAM_ALIAS_BASE (0x2003B040)  /* S=192 KB: covers psa_crypto BSS */
 #else
-#define NS_RAM_ALIAS_BASE (0x2004c020)  /* Non-Secure SRAM base */
+#define NS_RAM_ALIAS_BASE (0x2004B040)  /* S=256 KB: regression test */
 #endif
 
 /* KM4TZ MSP_S RAM: 2.5k */
@@ -245,6 +248,8 @@
 #define NS_NP_LOGIC_BASE (0x0C000000) /* km0 np logic address */
 
 #define TOTAL_ROM_SIZE FLASH_TOTAL_SIZE
-#define TOTAL_RAM_SIZE (0x20068000 - S_RAM_ALIAS_BASE)     /* S + NS SRAM */
+/* S+NS SRAM total: S_RAM_ALIAS_BASE(0x2000B020) ~ 0x20068000 = ~372 KB.
+ * Subtract 0x20 for the NS Ameba header gap between S and NS regions. */
+#define TOTAL_RAM_SIZE (0x20068000 - S_RAM_ALIAS_BASE - 0x20)
 
 #endif /* __FLASH_LAYOUT_H__ */

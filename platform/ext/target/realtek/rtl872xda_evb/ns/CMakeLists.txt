@@ -125,26 +125,26 @@ add_custom_command(
             ${CMAKE_BINARY_DIR}/bin/target_pure_img2.axf ${CMAKE_BINARY_DIR}/bin/psram_2.bin
 
     # 5. Pad xip image only, same as merge_bin.py
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
+    COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py pad
             -i ${CMAKE_BINARY_DIR}/bin/xip_image2.bin -l 32
 
     # 6. Prepend headers with the same symbols used by merge_bin.py
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+    COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
             -o ${CMAKE_BINARY_DIR}/bin/entry_prepend.bin
             -i ${CMAKE_BINARY_DIR}/bin/entry.bin
             -s __image2_entry_func_entry__ -m ${CMAKE_BINARY_DIR}/bin/target_img2.map
 
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+    COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
             -o ${CMAKE_BINARY_DIR}/bin/sram_2_prepend.bin
             -i ${CMAKE_BINARY_DIR}/bin/sram_2.bin
             -s __data_start__ -m ${CMAKE_BINARY_DIR}/bin/target_img2.map
 
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+    COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
             -o ${CMAKE_BINARY_DIR}/bin/psram_2_prepend.bin
             -i ${CMAKE_BINARY_DIR}/bin/psram_2.bin
             -s Image$$NS_CODE_START$$Base -m ${CMAKE_BINARY_DIR}/bin/target_img2.map
 
-    COMMAND ${PYTHON_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
+    COMMAND ${Python3_EXECUTABLE} ${HAL_REALTEK_PATH}/ameba/scripts/axf2bin.py prepend_header
             -o ${CMAKE_BINARY_DIR}/bin/xip_image2_prepend.bin
             -i ${CMAKE_BINARY_DIR}/bin/xip_image2.bin
             -s Image$$NS_CODE_START$$Base -m ${CMAKE_BINARY_DIR}/bin/target_img2.map

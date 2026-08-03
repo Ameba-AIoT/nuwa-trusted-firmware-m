@@ -106,13 +106,36 @@ if(GCC_VERSION VERSION_GREATER_EQUAL "8.0.0")
     endif()
 endif()
 
+if(NOT DEFINED CONFIG_PICOLIBC)
+    set(CONFIG_PICOLIBC TRUE)
+endif()
+
+if (CONFIG_PICOLIBC)
+    set(LIBC_COMPILE_OPTIONS
+        -specs=picolibc.specs
+        )
+    set(LIBC_LINK_OPTIONS
+        -specs=picolibc.specs
+        -nostartfiles
+        -u main
+        )
+else()
+    set(LIBC_COMPILE_OPTIONS
+        -specs=nano.specs
+        -specs=nosys.specs
+        )
+    set(LIBC_LINK_OPTIONS
+        -specs=nano.specs
+        -specs=nosys.specs
+        )
+endif()
+
 add_compile_options(
-    -specs=nano.specs
-    -specs=nosys.specs
+    ${LIBC_COMPILE_OPTIONS}
     -Wall
     -Wno-format
-    -Wno-array-parameter
-    -Wno-return-type
+    # -Warray-parameter was introduced in GCC 11; older toolchains reject it.
+    $<$<VERSION_GREATER_EQUAL:${GCC_VERSION},11.0.0>:-Warray-parameter>
     -Wno-unused-but-set-variable
     -c
     -fdata-sections
@@ -126,6 +149,7 @@ add_compile_options(
     # Force DWARF version 4 for zephyr as pyelftools does not support version 5 at present
     -gdwarf-4
     $<$<OR:$<BOOL:${TFM_DEBUG_SYMBOLS}>,$<BOOL:${TFM_CODE_COVERAGE}>>:-g>
+    $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<BOOL:${TFM_DEBUG_OPTIMISATION}>,$<CONFIG:Debug>>:-Og>
     $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<BOOL:${CONFIG_TFM_WARNINGS_ARE_ERRORS}>>:-Werror>
 )
 
@@ -147,8 +171,8 @@ endif()
 
 add_link_options(
     --entry=Reset_Handler
-    -specs=nano.specs
-    -specs=nosys.specs
+    ${LIBC_LINK_OPTIONS}
+    -mthumb
     LINKER:-check-sections
     LINKER:-fatal-warnings
     LINKER:--gc-sections
@@ -200,7 +224,9 @@ set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS_INIT})
 set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS_INIT})
 set(CMAKE_ASM_FLAGS ${CMAKE_ASM_FLAGS_INIT})
 
-if (CONFIG_TFM_BL2_FLOAT_ABI STREQUAL "hard" AND CONFIG_TFM_FP_ARCH)
+if (CONFIG_TFM_BL2_FLOAT_ABI STREQUAL "hard")
+    # Some boards (e.g. amebadplus) link BL2 against precompiled libs built
+    # with hard-float VFP ABI; BL2 itself must then also use hard-float.
     set(BL2_COMPILER_CP_FLAG -mfloat-abi=hard -mfpu=${CONFIG_TFM_FP_ARCH})
     set(BL2_LINKER_CP_OPTION -mfloat-abi=hard -mfpu=${CONFIG_TFM_FP_ARCH})
 else()
