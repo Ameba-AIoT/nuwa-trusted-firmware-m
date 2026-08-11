@@ -215,14 +215,14 @@
 #define S_ROM_ALIAS_BASE  (0x00C00020)  /* Secure Flash base (XIP virtual address, no S-bit prefix) */
 #define NS_ROM_ALIAS_BASE (0x04000020)  /* Non-Secure Flash base (same physical flash) */
 
-#define S_RAM_ALIAS_BASE  (0x20007000)  /* Secure SRAM base */
+#define S_RAM_ALIAS_BASE  (0x20006020)  /* Secure SRAM base (0x20006000 + 0x20 image-header gap) */
 
-/* NS RAM base = S_RAM_ALIAS_BASE + S_DATA_SIZE + 0x20 (Ameba header gap).
+/* NS RAM base = S_RAM_ALIAS_BASE + S_DATA_SIZE (no extra +0x20; already in S_RAM_ALIAS_BASE).
  * Must be kept in sync with S_DATA_SIZE in region_defs.h and sram0_ns DTS. */
 #if defined(TFM_NS_REG_TEST) || defined(TFM_S_REG_TEST)
-#define NS_RAM_ALIAS_BASE (0x2002a020)  /* S=140 KB: 0x20007000+0x23000+0x20 */
+#define NS_RAM_ALIAS_BASE (0x20029020)  /* S=140 KB: 0x20006020+0x23000 */
 #else
-#define NS_RAM_ALIAS_BASE (0x2001f020)  /* S= 96 KB: 0x20007000+0x18000+0x20 */
+#define NS_RAM_ALIAS_BASE (0x2001e020)  /* S= 96 KB: 0x20006020+0x18000 */
 #endif
 
 /* KM4TZ MSP_S RAM: 2.5k */
@@ -233,10 +233,10 @@
 /* S+NS SRAM available to TF-M: S_RAM_ALIAS_BASE ~ KM4NS_IMG2_RAM_START.
  * KM4NS_IMG2_RAM_START = 0x20068000 is a hard boundary — the second
  * independent core (KM4NS, no TrustZone) loads its firmware there.
- * Subtract 0x20 so that NS_DATA_END = NS_DATA_START + NS_DATA_SIZE
- *   = (S_RAM_ALIAS_BASE + S_DATA_SIZE + 0x20) + (TOTAL_RAM_SIZE - S_DATA_SIZE)
- *   = S_RAM_ALIAS_BASE + TOTAL_RAM_SIZE + 0x20  ==  0x20068000  (exact). */
-#define TOTAL_RAM_SIZE (0x20068000 - 0x20007000 - 0x20)  /* 0x60FE0 = ~388 KB */
+ * NS_DATA_END = NS_DATA_START + NS_DATA_SIZE
+ *   = (S_RAM_ALIAS_BASE + S_DATA_SIZE) + (TOTAL_RAM_SIZE - S_DATA_SIZE)
+ *   = S_RAM_ALIAS_BASE + TOTAL_RAM_SIZE  ==  0x20068000  (exact). */
+#define TOTAL_RAM_SIZE (0x20068000 - S_RAM_ALIAS_BASE)  /* 0x61FE0 = ~391 KB */
 
 #define NS_AP_LOGIC_BASE (0x04000000)
 #define NS_NP_LOGIC_BASE (0x02000000)

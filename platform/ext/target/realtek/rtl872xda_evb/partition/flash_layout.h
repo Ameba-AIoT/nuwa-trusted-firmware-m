@@ -226,13 +226,13 @@
 // #define S_RAM_ALIAS_BASE  (0x2000C000)  /* Secure SRAM base */
 #define S_RAM_ALIAS_BASE  (0x2000B020)  /* Secure SRAM base */
 
-/* NS_RAM_ALIAS_BASE = S_RAM_ALIAS_BASE + S_DATA_SIZE + 0x20 (Ameba NS header gap).
- * S=192 KB: 0x2000B020 + 0x30000 + 0x20 = 0x2003B040, NS=179.9 KB
- * S=256 KB: 0x2000B020 + 0x40000 + 0x20 = 0x2004B040, NS=115.9 KB */
+/* NS_RAM_ALIAS_BASE = S_RAM_ALIAS_BASE + S_DATA_SIZE (no extra +0x20; already in S_RAM_ALIAS_BASE).
+ * S=192 KB: 0x2000B020 + 0x30000 = 0x2003B020, NS=179.97 KB
+ * S=256 KB: 0x2000B020 + 0x40000 = 0x2004B020, NS=115.97 KB */
 #if !defined(TFM_NS_REG_TEST) && !defined(TFM_S_REG_TEST)
-#define NS_RAM_ALIAS_BASE (0x2003B040)  /* S=192 KB: covers psa_crypto BSS */
+#define NS_RAM_ALIAS_BASE (0x2003B020)  /* S=192 KB: covers psa_crypto BSS */
 #else
-#define NS_RAM_ALIAS_BASE (0x2004B040)  /* S=256 KB: regression test */
+#define NS_RAM_ALIAS_BASE (0x2004B020)  /* S=256 KB: regression test */
 #endif
 
 /* KM4TZ MSP_S RAM: 2.5k */
@@ -249,7 +249,9 @@
 
 #define TOTAL_ROM_SIZE FLASH_TOTAL_SIZE
 /* S+NS SRAM total: S_RAM_ALIAS_BASE(0x2000B020) ~ 0x20068000 = ~372 KB.
- * Subtract 0x20 for the NS Ameba header gap between S and NS regions. */
-#define TOTAL_RAM_SIZE (0x20068000 - S_RAM_ALIAS_BASE - 0x20)
+ * NS_DATA_END = NS_DATA_START + NS_DATA_SIZE
+ *   = (S_RAM_ALIAS_BASE + S_DATA_SIZE) + (TOTAL_RAM_SIZE - S_DATA_SIZE)
+ *   = S_RAM_ALIAS_BASE + TOTAL_RAM_SIZE  ==  0x20068000  (exact). */
+#define TOTAL_RAM_SIZE (0x20068000 - S_RAM_ALIAS_BASE)  /* 0x5CFE0 = ~372 KB */
 
 #endif /* __FLASH_LAYOUT_H__ */
