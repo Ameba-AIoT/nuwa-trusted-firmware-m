@@ -215,28 +215,81 @@
 #define S_ROM_ALIAS_BASE  (0x00C00020)  /* Secure Flash base (XIP virtual address, no S-bit prefix) */
 #define NS_ROM_ALIAS_BASE (0x04000020)  /* Non-Secure Flash base (same physical flash) */
 
-#define S_RAM_ALIAS_BASE  (0x20006020)  /* Secure SRAM base (0x20006000 + 0x20 image-header gap) */
+/* ===================== SRAM partitioning ==============================
+ *
+ * Only the SRAM_* primitives below and S_DATA_SIZE are chosen by hand;
+ * everything else in this block, in region_defs.h, and the BL2/S/NS linker
+ * scripts is derived from them. The `#error` guards at the end of
+ * region_defs.h fail the build if a primitive stops adding up.
+ *
+ * The windows mirror amebag2/ameba_layout.ld, which defines them cumulatively
+ * so they structurally cannot overlap:
+ *
+ *   KM4TZ_IMG1_RAM_SATRT   = SRAM_BASE + KM4TZ_KM4NS_RAM_SIZE  = 0x20005000
+ *   KM4TZ_IMG1_SIZE        = 4 KB  if CONFIG_IMG1_FLASH (bootloader XIPs from flash)
+ *                            32 KB otherwise            (bootloader resident in RAM)
+ *   KM4TZ_RAM_TZ_NSC_START = KM4TZ_IMG1_RAM_SATRT + KM4TZ_IMG1_SIZE  <- next image
+ *   KM4TZ_BOOTLOADER_RAM_S = KM4TZ_IMG1_RAM_SATRT + SECURE_ADDR_OFFSET(0x10000000)
+ *                                                  + IMAGE_HEADER_LEN(0x20)
+ *
+ * TF-M's BL2 XIPs its code from flash but still needs ~26 KB of RAM (mcuboot +
+ * mbedtls + stack + heap), i.e. the SDK's 32 KB variant, so the image above it
+ * starts at 0x2000D000. The earlier 0x20006020 secure base was the 4 KB
+ * (flash-XIP bootloader) boundary, which only holds if the bootloader's *data*
+ * also fits in 4 KB -- it does not, so the secure image landed inside BL2's own
+ * .bss / stack / heap.
+ *
+ *   0x20000000 ..                 ROM BSS, MSP stacks, IPC shared (fixed HW)
+ *   SRAM_BL2_START      + 0x20    ameba image header
+ *                       ..        BL2 .data/.bss/.msp_stack/.heap
+ *   S_RAM_ALIAS_BASE    ..        TF-M secure image RAM        (S_DATA_SIZE)
+ *   NS_RAM_ALIAS_BASE   ..        non-secure image (Zephyr)    (NS_DATA_SIZE)
+ *   SRAM_NS_TOP                   hard top: KM4NS image base
+ */
+#define SRAM_SECURE_ALIAS_OFFSET (0x10000000)
+#define SRAM_S_ALIAS(x)          ((x) + SRAM_SECURE_ALIAS_OFFSET)
 
-/* NS RAM base = S_RAM_ALIAS_BASE + S_DATA_SIZE (no extra +0x20; already in S_RAM_ALIAS_BASE).
- * Must be kept in sync with S_DATA_SIZE in region_defs.h and sram0_ns DTS. */
+#define SRAM_NS_TOP              (0x20068000)
+#define SRAM_BL2_START           (0x20005000) /* SDK KM4TZ_IMG1_RAM_SATRT */
+#define SRAM_BL2_SIZE            (0x8000)     /* SDK KM4TZ_IMG1_SIZE, RAM-resident */
+#define SRAM_BL2_ENTRY_RESERVED  (0x20)       /* ameba image header; the ROM entry
+                                               * table is in flash for this SoC */
+
+/* Secure SRAM base == the SDK's KM4TZ_RAM_TZ_NSC_START: first address above BL2.
+ * The secure image XIPs from flash (S_CODE_START), so this is its RAM only and
+ * needs no image-header gap. */
+#define S_RAM_ALIAS_BASE         (SRAM_BL2_START + SRAM_BL2_SIZE) /* 0x2000D000 */
+
+/* Secure image RAM footprint.
+ *  -  96 KB default (non-regression); covers standard partitions + IAT +
+ *     custom partitions. Change 8964 (BL2 support) added ~10 KB S-side BSS when
+ *     IAT is enabled; any extra partition also consumes S RAM.
+ *  - 140 KB regression test (TFM_S_REG_TEST / TFM_NS_REG_TEST) */
 #if defined(TFM_NS_REG_TEST) || defined(TFM_S_REG_TEST)
-#define NS_RAM_ALIAS_BASE (0x20029020)  /* S=140 KB: 0x20006020+0x23000 */
+#define S_DATA_SIZE              (140 * 1024)
 #else
-#define NS_RAM_ALIAS_BASE (0x2001e020)  /* S= 96 KB: 0x20006020+0x18000 */
+#define S_DATA_SIZE              (96 * 1024)
 #endif
+
+/* Non-secure (Zephyr) SRAM base. The dts node `sram0_ns` in
+ * dts/arm/realtek/amebag2/amebag2.dtsi is the one value that cannot be derived
+ * from here and must be kept equal:
+ *   S= 96 KB -> 0x20025000, size 0x43000 (268 KB)
+ *   S=140 KB -> 0x20030000, size 0x38000 (224 KB) */
+#define NS_RAM_ALIAS_BASE        (S_RAM_ALIAS_BASE + S_DATA_SIZE)
 
 /* KM4TZ MSP_S RAM: 2.5k */
 #define KM4TZ_MSP_RAM_S_ADDR  (0x30000600)
 #define KM4TZ_MSP_RAM_S_SIZE  (0x30001000 - 0x30000600)
 
 #define TOTAL_ROM_SIZE FLASH_TOTAL_SIZE
-/* S+NS SRAM available to TF-M: S_RAM_ALIAS_BASE ~ KM4NS_IMG2_RAM_START.
- * KM4NS_IMG2_RAM_START = 0x20068000 is a hard boundary — the second
+/* S+NS SRAM available to TF-M: S_RAM_ALIAS_BASE ~ SRAM_NS_TOP (0x5B000, 364 KB).
+ * SRAM_NS_TOP = KM4NS_IMG2_RAM_START is a hard boundary — the second
  * independent core (KM4NS, no TrustZone) loads its firmware there.
  * NS_DATA_END = NS_DATA_START + NS_DATA_SIZE
  *   = (S_RAM_ALIAS_BASE + S_DATA_SIZE) + (TOTAL_RAM_SIZE - S_DATA_SIZE)
- *   = S_RAM_ALIAS_BASE + TOTAL_RAM_SIZE  ==  0x20068000  (exact). */
-#define TOTAL_RAM_SIZE (0x20068000 - S_RAM_ALIAS_BASE)  /* 0x61FE0 = ~391 KB */
+ *   = S_RAM_ALIAS_BASE + TOTAL_RAM_SIZE  ==  SRAM_NS_TOP  (exact). */
+#define TOTAL_RAM_SIZE (SRAM_NS_TOP - S_RAM_ALIAS_BASE)
 
 #define NS_AP_LOGIC_BASE (0x04000000)
 #define NS_NP_LOGIC_BASE (0x02000000)

@@ -100,22 +100,8 @@
 #define S_CODE_LIMIT    (S_CODE_START + S_CODE_SIZE - 1)
 
 #define S_DATA_START    (S_RAM_ALIAS(0x0))
-
-/* S secure RAM size:
- *  - 96 KB  default (non-regression); covers standard partitions + IAT +
- *           custom partitions. Change 8964 (BL2 support) added ~10 KB S-side
- *           BSS when IAT is enabled; any extra partition also consumes S RAM.
- *           96 KB gives sufficient headroom for all non-regression use cases.
- *  - 140 KB regression test (TFM_S_REG_TEST / TFM_NS_REG_TEST)
- * NOTE: NS_RAM_ALIAS_BASE in flash_layout.h must be kept in sync:
- *       NS_RAM_ALIAS_BASE = S_RAM_ALIAS_BASE + S_DATA_SIZE + 0x20
- */
-#if defined(TFM_NS_REG_TEST) || defined(TFM_S_REG_TEST)
-#define S_DATA_SIZE     (140 * 1024)
-#else
-#define S_DATA_SIZE     (96 * 1024)
-#endif
-
+/* S_DATA_SIZE lives in flash_layout.h next to the SRAM_* primitives it
+ * partitions, so NS_RAM_ALIAS_BASE can be derived from it. */
 #define S_DATA_LIMIT    (S_DATA_START + S_DATA_SIZE - 1)
 
 /* Non-secure regions */
@@ -161,8 +147,18 @@
 #define BL2_CODE_SIZE     (FLASH_AREA_BL2_SIZE)
 #define BL2_CODE_LIMIT    (BL2_CODE_START + BL2_CODE_SIZE - 1)
 
-#define BL2_DATA_START    (S_RAM_ALIAS(0x0))
-#define BL2_DATA_SIZE     (TOTAL_RAM_SIZE)
+/* BL2 data fills the SDK's IMG1 (bootloader) RAM window from the end of the
+ * image header up to the secure image. Derived, so it can never overlap the
+ * secure image; see the SRAM partitioning block in flash_layout.h for the map.
+ *
+ * The overlap matters on the power-gate wake path, which re-enters BL2 without
+ * re-running Reset_Handler: BL2 would find secure-world content where its .bss
+ * is, and the loader code it runs there dispatches through .bss function
+ * pointers. It also makes boot_clear_ram_area() unsafe (it would scrub part of
+ * the secure image on the way out of BL2). */
+#define BL2_DATA_END      (S_RAM_ALIAS_BASE)
+#define BL2_DATA_START    (SRAM_BL2_START + SRAM_BL2_ENTRY_RESERVED)
+#define BL2_DATA_SIZE     (BL2_DATA_END - BL2_DATA_START)
 #define BL2_DATA_LIMIT    (BL2_DATA_START + BL2_DATA_SIZE - 1)
 #endif /* BL2 */
 
@@ -196,5 +192,33 @@
 /* KM4TZ MSP_S RAM */
 #define S_KM4TZ_MSP_RAM_ADDR KM4TZ_MSP_RAM_S_ADDR
 #define S_KM4TZ_MSP_RAM_SIZE KM4TZ_MSP_RAM_S_SIZE
+
+/*------------------------- SRAM layout invariants ---------------------------
+ * These hold by construction as long as everything is derived from the SRAM_*
+ * primitives in flash_layout.h. They exist to fail the build the moment a
+ * value is hardcoded again and stops agreeing with the rest.
+ */
+#if (S_RAM_ALIAS_BASE) < ((SRAM_BL2_START) + (SRAM_BL2_SIZE))
+#error "S_RAM_ALIAS_BASE overlaps BL2's RAM window: BL2 cannot be re-entered on the power-gate wake path, and boot_clear_ram_area() would scrub the secure image"
+#endif
+
+#if (NS_RAM_ALIAS_BASE) != ((S_RAM_ALIAS_BASE) + (S_DATA_SIZE))
+#error "NS_RAM_ALIAS_BASE must be S_RAM_ALIAS_BASE + S_DATA_SIZE (dts sram0_ns must match too)"
+#endif
+
+#if !defined(PSA_API_TEST_NS) || defined(PSA_API_TEST_IPC)
+#if ((NS_DATA_START) + (NS_DATA_SIZE)) != (SRAM_NS_TOP)
+#error "non-secure data must end exactly at SRAM_NS_TOP"
+#endif
+#endif
+
+#ifdef BL2
+#if ((BL2_DATA_START) + (BL2_DATA_SIZE)) > (BL2_DATA_END)
+#error "BL2 data runs into the secure image"
+#endif
+#if (BL2_DATA_SIZE) < (0x7000)
+#error "BL2 RAM window too small: TF-M's BL2 needs ~26 KB (mcuboot + mbedtls + stack + heap)"
+#endif
+#endif /* BL2 */
 
 #endif /* __REGION_DEFS_H__ */

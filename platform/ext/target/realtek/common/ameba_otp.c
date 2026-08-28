@@ -16,38 +16,15 @@
 #define SECURE_KEY_PUB_ARRAY_LEN CONCAT(SECURE_KEY_PUB_ARRAY_NAME, _len)
 #define NONSECURE_KEY_PUB_ARRAY_LEN CONCAT(NONSECURE_KEY_PUB_ARRAY_NAME, _len)
 
-/**
- * \brief                               Initialises OTP storage.
- *
- * \return                              TFM_PLAT_ERR_SUCCESS if the
- *                                      initialization succeeds, otherwise
- *                                      TFM_PLAT_ERR_SYSTEM_ERR
- */
+/* IAK: 32-byte P-256 private key at OTP_USER_START (0x380), read via OTP_Read8() in PRoT */
+#define AMEBA_OTP_IAK_ADDR   (OTP_USER_START)
+#define AMEBA_OTP_IAK_LEN    32
+
 enum tfm_plat_err_t tfm_plat_otp_init(void)
 {
 	return TFM_PLAT_ERR_SUCCESS;
 }
 
-/**
- * \brief                               Reads the given OTP element.
- *
- * \param[in]  id                       ID of the element to read.
- * \param[in]  out_len                  Size of the buffer to read the element
- *                                      into in bytes.
- * \param[out] out                      Buffer to read the element into.
- *
- * \note                                If the size of the internal OTP
- *                                      representation of the item is different
- *                                      to out_len, then the smaller of the two
- *                                      is the amount of bytes that must be
- *                                      read.
- *
- * \retval TFM_PLAT_ERR_SUCCESS         The element is read successfully.
- * \retval TFM_PLAT_ERR_UNSUPPORTED     The given element has not been
- *                                      instanciated in OTP memory by this
- *                                      particular platform.
- * \retval TFM_PLAT_ERR_SYSTEM_ERR      An unspecified error occurred.
- */
 enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 									  size_t out_len, uint8_t *out)
 {
@@ -75,7 +52,6 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 		break;
 #ifdef TFM_DUMMY_PROVISIONING
 	case PLAT_OTP_ID_IAK: {
-		/* P-256 test private key matching TFM_DUMMY_PROVISIONING in provisioning.c */
 		static const uint8_t dummy_iak[32] = {
 			0xA9, 0xB4, 0x54, 0xB2, 0x6D, 0x6F, 0x90, 0xA4,
 			0xEA, 0x31, 0x19, 0x35, 0x64, 0xCB, 0xA9, 0x1F,
@@ -86,18 +62,16 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 		break;
 	}
 	case PLAT_OTP_ID_IAK_LEN: {
-		size_t iak_len = 32; /* P-256 private key = 32 bytes */
+		size_t iak_len = 32;
 		memcpy(out, &iak_len, MIN(out_len, sizeof(iak_len)));
 		break;
 	}
 	case PLAT_OTP_ID_IAK_TYPE: {
-		/* PSA_ECC_FAMILY_SECP_R1 = 0x12; store as uint32_t to match get_size */
-		uint32_t iak_type = 0x12;
+		uint32_t iak_type = 0x12; /* PSA_ECC_FAMILY_SECP_R1 */
 		memcpy(out, &iak_type, MIN(out_len, sizeof(iak_type)));
 		break;
 	}
 	case PLAT_OTP_ID_BOOT_SEED: {
-		/* Test boot seed matching TFM_DUMMY_PROVISIONING */
 		static const uint8_t dummy_boot_seed[32] = {
 			0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
 			0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF,
@@ -108,7 +82,6 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 		break;
 	}
 	case PLAT_OTP_ID_IMPLEMENTATION_ID: {
-		/* Test implementation ID matching TFM_DUMMY_PROVISIONING */
 		static const uint8_t dummy_impl_id[32] = {
 			0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
 			0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
@@ -119,7 +92,6 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 		break;
 	}
 	case PLAT_OTP_ID_ENTROPY_SEED: {
-		/* Test entropy seed matching TFM_DUMMY_PROVISIONING */
 		static const uint8_t dummy_entropy_seed[64] = {
 			0x12, 0x13, 0x23, 0x34, 0x0a, 0x05, 0x89, 0x78,
 			0xa3, 0x66, 0x8c, 0x0d, 0x97, 0x55, 0x53, 0xca,
@@ -134,12 +106,55 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 		break;
 	}
 #else  /* !TFM_DUMMY_PROVISIONING */
-	case PLAT_OTP_ID_IAK:
+	case PLAT_OTP_ID_IAK: {
+		size_t len = MIN(out_len, (size_t)AMEBA_OTP_IAK_LEN);
+		for (size_t i = 0; i < len; i++) {
+			if (OTP_Read8(AMEBA_OTP_IAK_ADDR + i, &out[i]) != RTK_SUCCESS) {
+				return TFM_PLAT_ERR_SYSTEM_ERR;
+			}
+		}
+		break;
+	}
+	case PLAT_OTP_ID_IAK_LEN: {
+		size_t iak_len = AMEBA_OTP_IAK_LEN;
+		memcpy(out, &iak_len, MIN(out_len, sizeof(iak_len)));
+		break;
+	}
+	case PLAT_OTP_ID_IAK_TYPE: {
+		uint32_t iak_type = 0x12; /* PSA_ECC_FAMILY_SECP_R1 */
+		memcpy(out, &iak_type, MIN(out_len, sizeof(iak_type)));
+		break;
+	}
+	case PLAT_OTP_ID_ENTROPY_SEED:
 		/*TODO: read from efuse */
 		memset(out, 0, out_len);
 		break;
-	case PLAT_OTP_ID_ENTROPY_SEED:
-		/*TODO: read from efuse */
+	case PLAT_OTP_ID_BOOT_SEED:
+		memset(out, 0, MIN(out_len, 32));
+		break;
+	case PLAT_OTP_ID_IMPLEMENTATION_ID:
+		memset(out, 0, MIN(out_len, 32));
+		break;
+	case PLAT_OTP_ID_CERT_REF:
+		memset(out, 0, MIN(out_len, 32));
+		break;
+	case PLAT_OTP_ID_VERIFICATION_SERVICE_URL: {
+		static const char url[] = "www.trustedfirmware.org";
+		size_t copy = MIN(out_len, sizeof(url));
+		memcpy(out, url, copy);
+		break;
+	}
+	case PLAT_OTP_ID_PROFILE_DEFINITION: {
+		static const char profile[] = "PSA_IOT_PROFILE_1";
+		size_t copy = MIN(out_len, sizeof(profile));
+		memcpy(out, profile, copy);
+		break;
+	}
+	/* RSE-style flags: not used on Ameba, return 0 to avoid UNSUPPORTED from attestation callers */
+	case PLAT_OTP_ID_CM_CONFIG_FLAGS:
+	case PLAT_OTP_ID_DM_CONFIG_FLAGS:
+	case PLAT_OTP_ID_SAM_CONFIG:
+	case PLAT_OTP_ID_REPROVISIONING_BITS:
 		memset(out, 0, out_len);
 		break;
 #endif /* TFM_DUMMY_PROVISIONING */
@@ -167,21 +182,18 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 	}
 #ifdef TFM_DUMMY_PROVISIONING
 	case PLAT_OTP_ID_PROFILE_DEFINITION: {
-		/* PSA IoT Profile 1 matching TFM_DUMMY_PROVISIONING / ATTEST_TOKEN_PROFILE_PSA_IOT_1 */
 		static const char profile_def[] = "PSA_IOT_PROFILE_1";
 		size_t copy = MIN(out_len, sizeof(profile_def));
 		memcpy(out, profile_def, copy);
 		break;
 	}
 	case PLAT_OTP_ID_VERIFICATION_SERVICE_URL: {
-		/* Verification service URL matching TFM_DUMMY_PROVISIONING */
 		static const char service_url[] = "www.trustedfirmware.org";
 		size_t copy = MIN(out_len, sizeof(service_url));
 		memcpy(out, service_url, copy);
 		break;
 	}
 	case PLAT_OTP_ID_CERT_REF: {
-		/* Certification reference matching TFM_DUMMY_PROVISIONING */
 		static const char cert_ref[] = "0604565272829-10010";
 		size_t copy = MIN(out_len, sizeof(cert_ref));
 		memcpy(out, cert_ref, copy);
@@ -197,49 +209,12 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 	return TFM_PLAT_ERR_SUCCESS;
 }
 
-/**
- * \brief                               Writes the specified bytes to the given
- *                                      OTP element.
- *
- * \param[in]  id                       ID of the element to write.
- * \param[in]  in_len                   Size of the buffer to write to the
- *                                      element in bytes.
- * \param[in]  in                       Pointer to the buffer to write to the
- *                                      element.
- *
- * \note                                This function must implement the OTP
- *                                      writing semantics, where any bit
- *                                      currently set to 1 cannot be set to 0.
- *                                      If such a write is requested, the
- *                                      function should return an error code and
- *                                      not alter the contents of OTP memory.
- *
- * \note                                If the size of the internal OTP
- *                                      representation of the item is smaller
- *                                      than in_len, this function must return
- *                                      an error other than TFM_PLAT_ERR_SUCCESS
- *                                      and not write any OTP.
- *
- * \retval TFM_PLAT_ERR_SUCCESS         The OTP is written successfully
- * \retval TFM_PLAT_ERR_UNSUPPORTED     The element is not supported.
- * \retval TFM_PLAT_ERR_SYSTEM_ERR      An unspecified error occurred.
- */
 enum tfm_plat_err_t tfm_plat_otp_write(enum tfm_otp_element_id_t id,
 									   size_t in_len, const uint8_t *in)
 {
 	return TFM_PLAT_ERR_SUCCESS;
 }
 
-/**
- * \brief                               Returns the size of a given OTP element.
- *
- * \param[in]  id                       ID of the element.
- * \param[out] size                     Size of the element.
- *
- * \retval TFM_PLAT_ERR_SUCCESS         The size is returned successfully.
- * \retval TFM_PLAT_ERR_UNSUPPORTED     The element is not supported.
- * \retval TFM_PLAT_ERR_SYSTEM_ERR      An unspecified error occurred.
- */
 enum tfm_plat_err_t tfm_plat_otp_get_size(enum tfm_otp_element_id_t id,
 		size_t *size)
 {
@@ -261,20 +236,39 @@ enum tfm_plat_err_t tfm_plat_otp_get_size(enum tfm_otp_element_id_t id,
 		*size = 64;
 		break;
 #else  /* !TFM_DUMMY_PROVISIONING */
-	/* IAK and ENTROPY_SEED: production builds must read from eFuse (TODO).
-	 * Return the expected sizes so that callers can allocate buffers;
-	 * read() returns zeroes for these IDs in the same build configuration. */
 	case PLAT_OTP_ID_IAK:
-		*size = 32;
+		*size = AMEBA_OTP_IAK_LEN;
+		break;
+	case PLAT_OTP_ID_IAK_LEN:
+		*size = sizeof(size_t);
+		break;
+	case PLAT_OTP_ID_IAK_TYPE:
+		*size = sizeof(uint32_t);
 		break;
 	case PLAT_OTP_ID_ENTROPY_SEED:
 		*size = 64;
 		break;
-	/* IAK_LEN and IAK_TYPE are only meaningful with a real key; read()
-	 * falls through to default (UNSUPPORTED) for these in production. */
-	case PLAT_OTP_ID_IAK_LEN:
-	case PLAT_OTP_ID_IAK_TYPE:
-		return TFM_PLAT_ERR_UNSUPPORTED;
+	case PLAT_OTP_ID_BOOT_SEED:
+		*size = 32;
+		break;
+	case PLAT_OTP_ID_IMPLEMENTATION_ID:
+		*size = 32;
+		break;
+	case PLAT_OTP_ID_CERT_REF:
+		*size = 32;
+		break;
+	case PLAT_OTP_ID_VERIFICATION_SERVICE_URL:
+		*size = sizeof("www.trustedfirmware.org");
+		break;
+	case PLAT_OTP_ID_PROFILE_DEFINITION:
+		*size = sizeof("PSA_IOT_PROFILE_1");
+		break;
+	case PLAT_OTP_ID_CM_CONFIG_FLAGS:
+	case PLAT_OTP_ID_DM_CONFIG_FLAGS:
+	case PLAT_OTP_ID_SAM_CONFIG:
+	case PLAT_OTP_ID_REPROVISIONING_BITS:
+		*size = sizeof(uint32_t);
+		break;
 #endif /* TFM_DUMMY_PROVISIONING */
 #ifdef MCUBOOT_BUILTIN_KEY
 	case PLAT_OTP_ID_BL2_ROTPK_0:
@@ -295,13 +289,13 @@ enum tfm_plat_err_t tfm_plat_otp_get_size(enum tfm_otp_element_id_t id,
 		*size = 32;
 		break;
 	case PLAT_OTP_ID_PROFILE_DEFINITION:
-		*size = sizeof("PSA_IOT_PROFILE_1"); /* 18: 17 chars + null */
+		*size = sizeof("PSA_IOT_PROFILE_1");
 		break;
 	case PLAT_OTP_ID_VERIFICATION_SERVICE_URL:
-		*size = sizeof("www.trustedfirmware.org"); /* 24: 23 chars + null */
+		*size = sizeof("www.trustedfirmware.org");
 		break;
 	case PLAT_OTP_ID_CERT_REF:
-		*size = sizeof("0604565272829-10010"); /* 20: 19 chars + null */
+		*size = sizeof("0604565272829-10010");
 		break;
 #endif /* TFM_DUMMY_PROVISIONING */
 	default:
@@ -311,25 +305,11 @@ enum tfm_plat_err_t tfm_plat_otp_get_size(enum tfm_otp_element_id_t id,
 	return TFM_PLAT_ERR_SUCCESS;
 }
 
-/**
- * \brief                               Enable a secure provisioning mode, if
- *                                      supported.
- *
- * \retval TFM_PLAT_ERR_SUCCESS         The mode was enabled successfully.
- * \retval TFM_PLAT_ERR_SYSTEM_ERR      An unspecified error occurred.
- */
 enum tfm_plat_err_t tfm_plat_otp_secure_provisioning_start(void)
 {
 	return TFM_PLAT_ERR_SUCCESS;
 }
 
-/**
- * \brief                               Disable the secure provisioning mode
- *                                      once provisioning has finished.
- *
- * \retval TFM_PLAT_ERR_SUCCESS         The mode was disabled successfully.
- * \retval TFM_PLAT_ERR_SYSTEM_ERR      An unspecified error occurred.
- */
 enum tfm_plat_err_t tfm_plat_otp_secure_provisioning_finish(void)
 {
 	return TFM_PLAT_ERR_SUCCESS;

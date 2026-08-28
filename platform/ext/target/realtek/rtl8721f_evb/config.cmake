@@ -22,6 +22,11 @@ endif()
 
 set(MCUBOOT_USE_PSA_CRYPTO            ON           CACHE BOOL      "Enable the cryptographic abstraction layer to use PSA Crypto APIs")
 
+# Enable authenticated encryption (AES-256-GCM) of ITS files. The AEAD key is
+# the on-chip IPSEC/OTP hardware key; the HAL is implemented in
+# common/tfm_hal_its_encryption.c + rtl8721f_evb/ameba_hw_gcm.c.
+set(ITS_ENCRYPTION                    ON           CACHE BOOL      "Enable authenticated encryption of ITS files using platform specific APIs")
+
 # Use two separate image slots so MCUboot verifies S and NS independently.
 # This matches the separate signing of tfm_s (256 KB slot) and the NS app
 # (512 KB slot) already done by the Realtek platform build system.

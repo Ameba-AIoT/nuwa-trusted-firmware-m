@@ -97,6 +97,9 @@ target_sources(platform_s
         $<$<NOT:$<BOOL:${PLATFORM_DEFAULT_OTP}>>:${CMAKE_CURRENT_SOURCE_DIR}/../common/ameba_otp.c>
         $<$<NOT:$<BOOL:${PLATFORM_DEFAULT_OTP}>>:${AUTO_GEN_NONSECURE_PUB_C}>
         $<$<NOT:$<BOOL:${PLATFORM_DEFAULT_OTP}>>:${AUTO_GEN_SECURE_PUB_C}>
+        # ITS authenticated-encryption HAL (shared) + AmebaG2 HW GCM adapter.
+        $<$<AND:$<BOOL:${ITS_ENCRYPTION}>,$<BOOL:${TFM_PARTITION_INTERNAL_TRUSTED_STORAGE}>>:${CMAKE_CURRENT_SOURCE_DIR}/../common/tfm_hal_its_encryption.c>
+        $<$<AND:$<BOOL:${ITS_ENCRYPTION}>,$<BOOL:${TFM_PARTITION_INTERNAL_TRUSTED_STORAGE}>>:${CMAKE_CURRENT_SOURCE_DIR}/ameba_hw_gcm.c>
 )
 
 if(NOT PLATFORM_DEFAULT_OTP)
@@ -121,8 +124,13 @@ target_compile_definitions(platform_s
         $<$<BOOL:${TEST_S_FPU}>:TEST_S_FPU>
         CONFIG_ARM_CORE_CM4
         CONFIG_ARM_CORE_CM4_KM4TZ
+        SOC_AMEBAG2
         SECURE_KEY_PUB_ARRAY_NAME=${SECURE_KEY_PUB_ARRAY_NAME}
         NONSECURE_KEY_PUB_ARRAY_NAME=${NONSECURE_KEY_PUB_ARRAY_NAME}
+        # Define the C preprocessor macro ITS_ENCRYPTION (not just the CMake
+        # cache var) so the #ifdef-gated aad/nonce/tag members of
+        # its_flash_fs_file_info_t are compiled in. Matches nordic_nrf/rp2350.
+        $<$<BOOL:${ITS_ENCRYPTION}>:ITS_ENCRYPTION>
 )
 
 target_compile_definitions(platform_region_defs
@@ -162,6 +170,7 @@ if(BL2)
         PUBLIC
             .
             ../common
+            partition
             ${HAL_REALTEK_SOC_DIR}/fwlib/include
             ${HAL_REALTEK_SOC_DIR}/fwlib/include/rom
             ${HAL_REALTEK_SOC_DIR}/../include
@@ -180,6 +189,7 @@ if(BL2)
         PUBLIC
             CONFIG_ARM_CORE_CM4
             CONFIG_ARM_CORE_CM4_KM4TZ
+            SOC_AMEBAG2   # startup_bl2.c: per-SoC power-gate wake path
             BLOCK_ERASE_DEFINE
             SECURE_KEY_PUB_ARRAY_NAME=${SECURE_KEY_PUB_ARRAY_NAME}
             NONSECURE_KEY_PUB_ARRAY_NAME=${NONSECURE_KEY_PUB_ARRAY_NAME}
@@ -190,6 +200,7 @@ if(BL2)
         PUBLIC
             .
             ../common
+            partition
             ${HAL_REALTEK_SOC_DIR}/fwlib/include
             ${HAL_REALTEK_SOC_DIR}/loader/bootloader
             ${HAL_REALTEK_SOC_DIR}/loader/mcuboot

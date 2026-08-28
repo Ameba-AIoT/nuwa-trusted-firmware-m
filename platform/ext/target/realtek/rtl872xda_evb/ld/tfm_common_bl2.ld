@@ -165,7 +165,12 @@ SECTIONS
     Image$$SHARED_DATA$$RW$$Base = ADDR(.tfm_bl2_shared_data);
     Image$$SHARED_DATA$$RW$$Limit = ADDR(.tfm_bl2_shared_data) + SIZEOF(.tfm_bl2_shared_data);
 
-    __image2_entry_func__ = __non_secure_psram_start__;
+    /* BOOT_WakeFromPG() (bootloader_km4.c, linked into BL2) reads the NS image's
+     * entry table through this symbol on the power-gate wake path. It must be the
+     * NS application's RAM base, not __non_secure_psram_start__ (= KM4_IMG2_ENTRY,
+     * the non-TrustZone loader location), otherwise the wake path dereferences a
+     * stale address and faults. */
+    __image2_entry_func__ = NS_IMG2_ENTRY;
 
     /*
      * ameba_psram.c's PSRAM_calibration() (called from BOOT_PSRAM_Init(),

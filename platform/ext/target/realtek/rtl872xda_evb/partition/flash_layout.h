@@ -68,13 +68,15 @@
 
 /* S image load address for MCUBoot IMAGE_F_RAM_LOAD.
  * ih_load_addr = S_IMAGE_LOAD_ADDRESS; payload lands at ih_load_addr + ih_hdr_size
- * = S_RAM_ALIAS_BASE = 0x2000B020 (S image VMA base, where vector table lives). */
-#define S_IMAGE_LOAD_ADDRESS            (S_RAM_ALIAS_BASE - 0x400)
+ * = S_RAM_ALIAS_BASE, the S image VMA base where its vector table lives. The
+ * header itself falls in the unused tail of BL2's RAM window; BL2_DATA_SIZE is
+ * derived from this address so BL2 never places anything there. */
+#define S_IMAGE_LOAD_ADDRESS            (S_RAM_ALIAS_BASE - BL2_HEADER_SIZE)
 
 /* Executable RAM range for MCUBoot MCUBOOT_RAM_LOAD validation.
  * Must cover the S image VMA range [S_RAM_ALIAS_BASE, S_RAM_ALIAS_BASE + S_DATA_SIZE). */
 #define IMAGE_EXECUTABLE_RAM_START      (S_RAM_ALIAS_BASE)
-#define IMAGE_EXECUTABLE_RAM_SIZE       (0x30000)  /* S_DATA_SIZE = 192KB */
+#define IMAGE_EXECUTABLE_RAM_SIZE       (S_DATA_SIZE)
 #else
 #define FLASH_BASE_ADDRESS              (0x08000000)
 #endif
@@ -223,17 +225,63 @@
 #define S_ROM_ALIAS_BASE  (0x0E000020)  /* Amebadpluse is not XIP, noused */
 #define NS_ROM_ALIAS_BASE (0x0E000020)  /* Non-Secure Flash base (same physical flash) */
 
-// #define S_RAM_ALIAS_BASE  (0x2000C000)  /* Secure SRAM base */
-#define S_RAM_ALIAS_BASE  (0x2000B020)  /* Secure SRAM base */
+/* ===================== SRAM partitioning ==============================
+ *
+ * Only the SRAM_* primitives below and S_DATA_SIZE are chosen by hand;
+ * everything else in this block, in region_defs.h, and the BL2/S/NS linker
+ * scripts is derived from them. The `#error` guards at the end of
+ * region_defs.h fail the build if a primitive stops adding up.
+ *
+ * The windows mirror component/soc/amebadplus/project/ameba_layout.ld, which
+ * defines them cumulatively so they structurally cannot overlap:
+ *
+ *   KM4_IMG1_RAM_START = SRAM_BASE + KM0_KM4_RAM_SIZE  = 0x2000A000
+ *   KM4_IMG1_SIZE      = 4 KB  if CONFIG_IMG1_FLASH (bootloader XIPs from flash)
+ *                        32 KB otherwise            (bootloader resident in RAM)
+ *   KM4_RAM_TZ_START   = KM4_IMG1_RAM_START + KM4_IMG1_SIZE   <- next image
+ *
+ * TF-M's BL2 is resident in RAM and measures ~26 KB (mcuboot + mbedtls +
+ * stack + heap), i.e. the 32 KB variant. The earlier 0x2000B020 secure base
+ * was the 4 KB (flash-XIP bootloader) boundary, which put the secure image
+ * ~28 KB inside BL2's own .bss / stack / heap.
+ *
+ *   0x20000000 ..                 ROM BSS, NS MSP stacks, KM0 shared (fixed HW)
+ *   SRAM_BL2_START      + 0x20    ameba image header
+ *                       + 0x100   KM4_IMG1_ENTRY: RamStartTable, address fixed by ROM
+ *                       ..        BL2 .data/.bss/.msp_stack/.heap
+ *   S_IMAGE_LOAD_ADDRESS + 0x400  MCUboot header of the secure image
+ *   S_RAM_ALIAS_BASE    ..        TF-M secure image           (S_DATA_SIZE)
+ *   NS_RAM_ALIAS_BASE   ..        non-secure image (Zephyr)   (NS_DATA_SIZE)
+ *   SRAM_NS_TOP                   hard top: KM4NS/second-core image base
+ */
+#define SRAM_SECURE_ALIAS_OFFSET (0x10000000)
+#define SRAM_S_ALIAS(x)          ((x) + SRAM_SECURE_ALIAS_OFFSET)
 
-/* NS_RAM_ALIAS_BASE = S_RAM_ALIAS_BASE + S_DATA_SIZE (no extra +0x20; already in S_RAM_ALIAS_BASE).
- * S=192 KB: 0x2000B020 + 0x30000 = 0x2003B020, NS=179.97 KB
- * S=256 KB: 0x2000B020 + 0x40000 = 0x2004B020, NS=115.97 KB */
+#define SRAM_NS_TOP              (0x20068000)
+#define SRAM_BL2_START           (0x2000A000) /* SDK KM4_IMG1_RAM_START */
+#define SRAM_BL2_SIZE            (0x8000)     /* SDK KM4_IMG1_SIZE, RAM-resident */
+/* ameba image header (0x20) + ROM-mandated entry table (0x100), see the
+ * KM4_IMG1_ENTRY region in ld/tfm_common_bl2.ld */
+#define SRAM_BL2_ENTRY_RESERVED  (0x120)
+
+/* Secure SRAM base == the SDK's KM4_RAM_TZ_START: first address above BL2. */
+#define S_RAM_ALIAS_BASE         (SRAM_BL2_START + SRAM_BL2_SIZE) /* 0x20012000 */
+
+/* Secure image RAM footprint.
+ * psa_crypto sample needs ~177 KB of S BSS; use 192 KB for headroom.
+ * Regression test needs ~240 KB; use 256 KB. */
 #if !defined(TFM_NS_REG_TEST) && !defined(TFM_S_REG_TEST)
-#define NS_RAM_ALIAS_BASE (0x2003B020)  /* S=192 KB: covers psa_crypto BSS */
+#define S_DATA_SIZE              (192 * 1024)
 #else
-#define NS_RAM_ALIAS_BASE (0x2004B020)  /* S=256 KB: regression test */
+#define S_DATA_SIZE              (256 * 1024)
 #endif
+
+/* Non-secure (Zephyr) SRAM base. The dts node `sram0_ns` in
+ * dts/arm/realtek/amebadplus/amebadplus.dtsi is the one value that cannot be
+ * derived from here and must be kept equal:
+ *   S=192 KB -> 0x20042000, size 0x26000 (152 KB)
+ *   S=256 KB -> 0x20052000, size 0x16000 ( 88 KB) */
+#define NS_RAM_ALIAS_BASE        (S_RAM_ALIAS_BASE + S_DATA_SIZE)
 
 /* KM4TZ MSP_S RAM: 2.5k */
 #define KM4TZ_MSP_RAM_S_ADDR  (0x30009000)
@@ -243,15 +291,26 @@
 #define KM4_IMG2_ENTRY  (0x20004DA0)
 #define KM4_IMG2_ENTRY_SIZE  (0x20)
 
+/* Entry table of the NS image (image2): RamStartFun / RamWakeupFun / VectorNS,
+ * emitted by the NS application into section .ram_image2.entry at the very start
+ * of its RAM. BL2's BOOT_WakeFromPG() dereferences it on the power-gate wake
+ * path, so it is the NS application's RAM base, which is NS_RAM_ALIAS_BASE
+ * below -- kept as an expression rather than a literal so the two cannot drift
+ * apart (dts node `sram0_ns` in dts/arm/realtek/amebadplus/amebadplus.dtsi must
+ * match the same address). KM4_IMG2_ENTRY above is the non-TrustZone
+ * (ameba-loader) location and does not apply to the TF-M split S/NS layout.
+ */
+#define NS_IMG2_ENTRY  (NS_RAM_ALIAS_BASE)
+
 /* NS image logic base addresses (used by startup_bl2.c) */
 #define NS_AP_LOGIC_BASE (0x0E000000) /* km4 app logic address */
 #define NS_NP_LOGIC_BASE (0x0C000000) /* km0 np logic address */
 
 #define TOTAL_ROM_SIZE FLASH_TOTAL_SIZE
-/* S+NS SRAM total: S_RAM_ALIAS_BASE(0x2000B020) ~ 0x20068000 = ~372 KB.
+/* S+NS SRAM available to TF-M: S_RAM_ALIAS_BASE ~ SRAM_NS_TOP (0x56000, 344 KB).
  * NS_DATA_END = NS_DATA_START + NS_DATA_SIZE
  *   = (S_RAM_ALIAS_BASE + S_DATA_SIZE) + (TOTAL_RAM_SIZE - S_DATA_SIZE)
- *   = S_RAM_ALIAS_BASE + TOTAL_RAM_SIZE  ==  0x20068000  (exact). */
-#define TOTAL_RAM_SIZE (0x20068000 - S_RAM_ALIAS_BASE)  /* 0x5CFE0 = ~372 KB */
+ *   = S_RAM_ALIAS_BASE + TOTAL_RAM_SIZE  ==  SRAM_NS_TOP  (exact). */
+#define TOTAL_RAM_SIZE (SRAM_NS_TOP - S_RAM_ALIAS_BASE)
 
 #endif /* __FLASH_LAYOUT_H__ */
