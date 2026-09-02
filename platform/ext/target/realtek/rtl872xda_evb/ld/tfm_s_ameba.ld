@@ -557,5 +557,12 @@ SECTIONS
     Load$$LR$$LR_SECONDARY_PARTITION$$Base = SECONDARY_PARTITION_START;
 #endif /* BL2 */
 
+    /* .noinit: NOLOAD section not covered by BSS zero; used for values that must
+     * survive the __PROGRAM_START BSS clear (e.g., DerivedKey_Bkup). */
+    .noinit (NOLOAD) : ALIGN(4)
+    {
+        *(.noinit*)
+    } > RAMABLE_REGION
+
     PROVIDE(__stack = Image$$ARM_LIB_STACK$$ZI$$Limit);
 }

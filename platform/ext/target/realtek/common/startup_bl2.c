@@ -16,6 +16,7 @@
 #include "bootutil/image.h"
 #include <sysflash/sysflash.h>
 #include "region_defs.h"
+#include <string.h>
 #include <ameba_soc.h>		/* RomVectorTable */
 #if defined(SOC_AMEBAG2)
 #include "boot_security_km4tz.h"	/* BOOT_Wake_TZCfg() */
@@ -63,6 +64,10 @@ extern uint64_t __STACK_SEAL;
 
 extern __NO_RETURN void __PROGRAM_START(void);
 
+/* Backup of the ROM DerivedKey for the HUK OTP read in ameba_otp.c. In .noinit
+ * so it survives the BSS clear. Populated in boot_platform_post_init(). */
+__attribute__((section(".noinit"))) u8 DerivedKey_Bkup[16];
+
 /*----------------------------------------------------------------------------
   Internal References
  *----------------------------------------------------------------------------*/
@@ -87,6 +92,20 @@ void Reset_Handler(void)
 
     SystemInit();                             /* CMSIS System Initialization */
     __PROGRAM_START();                        /* Enter PreMain (C library entry point) */
+}
+
+int32_t boot_platform_post_init(void)
+{
+	/* Copy DerivedKey only on cold boot / deep-sleep wakeup; on warm reset the
+	 * ROM clears its BSS, so keep the value from the last cold boot. Done here,
+	 * not in Reset_Handler: reading the secure-alias ROM BSS that early faults
+	 * on amebadplus, whose BL2 runs from the secure alias. */
+	if ((BOOT_Reason() == 0) || (BOOT_Reason() == AON_BIT_RSTF_DSLP)) {
+		extern u8 DerivedKey[16];
+		memcpy(DerivedKey_Bkup, DerivedKey, sizeof(DerivedKey_Bkup));
+	}
+
+	return 0;
 }
 
 int boot_platform_post_load(uint32_t image_id)

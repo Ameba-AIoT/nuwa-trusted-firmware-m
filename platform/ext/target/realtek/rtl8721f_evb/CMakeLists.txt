@@ -33,6 +33,7 @@ target_sources(tfm_s
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/cmsis_core/startup_amebag2.c
         ${CMAKE_CURRENT_SOURCE_DIR}/cmsis_core/system_core_init.c
+        ${HAL_REALTEK_SOC_DIR}/fwlib/ram_common/ameba_reset.c
 )
 
 # Use the common scatter file for Isolation L1 to L2

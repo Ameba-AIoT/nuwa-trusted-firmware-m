@@ -8,6 +8,7 @@
 
 #include "tfm_plat_otp.h"
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 
 #define _CONCAT(a, b) a##b
@@ -19,6 +20,13 @@
 /* IAK: 32-byte P-256 private key at OTP_USER_START (0x380), read via OTP_Read8() in PRoT */
 #define AMEBA_OTP_IAK_ADDR   (OTP_USER_START)
 #define AMEBA_OTP_IAK_LEN    32
+
+/* Boot seed: generated once per boot, cached for the lifetime of the session.
+ * All attestation tokens within the same boot share the same value so that a
+ * relying party can correlate them to a single boot session. */
+#define BOOT_SEED_SIZE 32
+static uint8_t boot_seed_cache[BOOT_SEED_SIZE];
+static bool    boot_seed_valid = false;
 
 enum tfm_plat_err_t tfm_plat_otp_init(void)
 {
@@ -46,10 +54,12 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 	}
 
 	switch (id) {
-	case PLAT_OTP_ID_HUK:
-		/*TODO: read from efuse */
-		memset(out, 0, MIN(out_len, 32));
+	case PLAT_OTP_ID_HUK: {
+		extern u8 DerivedKey_Bkup[16];
+		memset(out, 0, out_len);
+		memcpy(out, DerivedKey_Bkup, MIN(out_len, sizeof(DerivedKey_Bkup)));
 		break;
+	}
 #ifdef TFM_DUMMY_PROVISIONING
 	case PLAT_OTP_ID_IAK: {
 		static const uint8_t dummy_iak[32] = {
@@ -125,16 +135,26 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 		memcpy(out, &iak_type, MIN(out_len, sizeof(iak_type)));
 		break;
 	}
-	case PLAT_OTP_ID_ENTROPY_SEED:
-		/*TODO: read from efuse */
+	case PLAT_OTP_ID_IAK_ID:
 		memset(out, 0, out_len);
 		break;
+	case PLAT_OTP_ID_ENTROPY_SEED:
+		TRNG_get_random_bytes(out, MIN(out_len, 64u));
+		break;
 	case PLAT_OTP_ID_BOOT_SEED:
-		memset(out, 0, MIN(out_len, 32));
+		if (!boot_seed_valid) {
+			TRNG_get_random_bytes(boot_seed_cache, sizeof(boot_seed_cache));
+			boot_seed_valid = true;
+		}
+		memcpy(out, boot_seed_cache, MIN(out_len, sizeof(boot_seed_cache)));
 		break;
-	case PLAT_OTP_ID_IMPLEMENTATION_ID:
-		memset(out, 0, MIN(out_len, 32));
+	case PLAT_OTP_ID_IMPLEMENTATION_ID: {
+		uint32_t uuid[2] = {0, 0};
+		EFUSE_GetUUID(uuid);
+		memset(out, 0, MIN(out_len, 32u));
+		memcpy(out, uuid, MIN(out_len, sizeof(uuid)));
 		break;
+	}
 	case PLAT_OTP_ID_CERT_REF:
 		memset(out, 0, MIN(out_len, 32));
 		break;
@@ -220,7 +240,7 @@ enum tfm_plat_err_t tfm_plat_otp_get_size(enum tfm_otp_element_id_t id,
 {
 	switch (id) {
 	case PLAT_OTP_ID_HUK:
-		*size = 32;
+		*size = 16;
 		break;
 #ifdef TFM_DUMMY_PROVISIONING
 	case PLAT_OTP_ID_IAK:
@@ -244,6 +264,9 @@ enum tfm_plat_err_t tfm_plat_otp_get_size(enum tfm_otp_element_id_t id,
 		break;
 	case PLAT_OTP_ID_IAK_TYPE:
 		*size = sizeof(uint32_t);
+		break;
+	case PLAT_OTP_ID_IAK_ID:
+		*size = 32;
 		break;
 	case PLAT_OTP_ID_ENTROPY_SEED:
 		*size = 64;

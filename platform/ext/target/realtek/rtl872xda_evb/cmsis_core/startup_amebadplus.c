@@ -8,6 +8,7 @@
 
 #include "tfm_hal_device_header.h"
 #include "region.h"
+#include <string.h>
 
 /*----------------------------------------------------------------------------
   External References
@@ -19,6 +20,10 @@ extern uint64_t __STACK_SEAL;
 #endif
 
 extern __NO_RETURN void __PROGRAM_START(void);
+
+/* DerivedKey_Bkup: preserved across BSS clear; copied from ROM DerivedKey before
+ * __PROGRAM_START zeros .TFM_BSS. Placed in .noinit (NOLOAD, not in zero table). */
+__attribute__((section(".noinit"))) u8 DerivedKey_Bkup[16];
 
 /*----------------------------------------------------------------------------
   Internal References
@@ -104,6 +109,12 @@ void Reset_Handler(void)
 	 * TFM uses SVC for BACKEND_SPM_INIT and other syscalls, so re-enable
 	 * IRQs before main runs. */
 	__enable_irq();
+	/* Copy DerivedKey only on cold boot / deep-sleep wakeup; on warm reset the
+	 * ROM clears its BSS, so keep the value from the last cold boot. */
+	if ((BOOT_Reason() == 0) || (BOOT_Reason() == AON_BIT_RSTF_DSLP)) {
+		extern u8 DerivedKey[16];
+		memcpy(DerivedKey_Bkup, DerivedKey, sizeof(DerivedKey_Bkup));
+	}
 #else
     extern void SysTick_Handler (void);
 
