@@ -64,6 +64,12 @@ if(NOT CRYPTO_HW_ACCELERATOR)
     add_library(bl2_fallback_rng STATIC
         src/psa_stub_rng.c
     )
+    # Must match bl2, or linking fails with "uses VFP register arguments,
+    # psa_stub_rng.o does not" once the stub is actually pulled in.
+    target_compile_options(bl2_fallback_rng
+        PRIVATE
+            ${BL2_COMPILER_CP_FLAG}
+    )
     target_link_libraries(bl2_fallback_rng
         PUBLIC
             bl2_crypto_config

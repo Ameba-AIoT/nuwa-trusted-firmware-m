@@ -101,20 +101,6 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 		memcpy(out, dummy_impl_id, MIN(out_len, sizeof(dummy_impl_id)));
 		break;
 	}
-	case PLAT_OTP_ID_ENTROPY_SEED: {
-		static const uint8_t dummy_entropy_seed[64] = {
-			0x12, 0x13, 0x23, 0x34, 0x0a, 0x05, 0x89, 0x78,
-			0xa3, 0x66, 0x8c, 0x0d, 0x97, 0x55, 0x53, 0xca,
-			0xb5, 0x76, 0x18, 0x62, 0x29, 0xc6, 0xb6, 0x79,
-			0x75, 0xc8, 0x5a, 0x8d, 0x9e, 0x11, 0x8f, 0x85,
-			0xde, 0xc4, 0x5f, 0x66, 0x21, 0x52, 0xf9, 0x39,
-			0xd9, 0x77, 0x93, 0x28, 0xb0, 0x5e, 0x02, 0xfa,
-			0x58, 0xb4, 0x16, 0xc8, 0x0f, 0x38, 0x91, 0xbb,
-			0x28, 0x17, 0xcd, 0x8a, 0xc9, 0x53, 0x72, 0x66,
-		};
-		memcpy(out, dummy_entropy_seed, MIN(out_len, sizeof(dummy_entropy_seed)));
-		break;
-	}
 #else  /* !TFM_DUMMY_PROVISIONING */
 	case PLAT_OTP_ID_IAK: {
 		size_t len = MIN(out_len, (size_t)AMEBA_OTP_IAK_LEN);
@@ -137,9 +123,6 @@ enum tfm_plat_err_t tfm_plat_otp_read(enum tfm_otp_element_id_t id,
 	}
 	case PLAT_OTP_ID_IAK_ID:
 		memset(out, 0, out_len);
-		break;
-	case PLAT_OTP_ID_ENTROPY_SEED:
-		TRNG_get_random_bytes(out, MIN(out_len, 64u));
 		break;
 	case PLAT_OTP_ID_BOOT_SEED:
 		if (!boot_seed_valid) {
@@ -252,9 +235,6 @@ enum tfm_plat_err_t tfm_plat_otp_get_size(enum tfm_otp_element_id_t id,
 	case PLAT_OTP_ID_IAK_TYPE:
 		*size = sizeof(uint32_t);
 		break;
-	case PLAT_OTP_ID_ENTROPY_SEED:
-		*size = 64;
-		break;
 #else  /* !TFM_DUMMY_PROVISIONING */
 	case PLAT_OTP_ID_IAK:
 		*size = AMEBA_OTP_IAK_LEN;
@@ -267,9 +247,6 @@ enum tfm_plat_err_t tfm_plat_otp_get_size(enum tfm_otp_element_id_t id,
 		break;
 	case PLAT_OTP_ID_IAK_ID:
 		*size = 32;
-		break;
-	case PLAT_OTP_ID_ENTROPY_SEED:
-		*size = 64;
 		break;
 	case PLAT_OTP_ID_BOOT_SEED:
 		*size = 32;

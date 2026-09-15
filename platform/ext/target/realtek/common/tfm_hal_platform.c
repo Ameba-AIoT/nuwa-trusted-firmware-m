@@ -186,19 +186,3 @@ int _write(int fd, char *str, int len)
 	/* Send string and return the number of characters written */
 	return stdio_output_string((const char *)str, (uint32_t)len);
 }
-
-int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t *olen)
-{
-	(void)data;
-	RandBytes_Get(output, len);
-	*olen = len;
-	return 0;
-}
-
-int mbedtls_psa_external_get_random(void *context, uint8_t *output, size_t output_size, size_t *output_length)
-{
-	(void)context;
-	RandBytes_Get(output, output_size);
-	*output_length = output_size;
-	return 0;
-}

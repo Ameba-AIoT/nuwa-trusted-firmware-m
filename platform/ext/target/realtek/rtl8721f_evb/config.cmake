@@ -22,6 +22,11 @@ endif()
 
 set(MCUBOOT_USE_PSA_CRYPTO            ON           CACHE BOOL      "Enable the cryptographic abstraction layer to use PSA Crypto APIs")
 
+# See CRYPTO_EXT_RNG in config_tfm_target.h. The extra config is what actually
+# enables MBEDTLS_PSA_CRYPTO_EXTERNAL_RNG.
+set(TFM_MBEDCRYPTO_PLATFORM_EXTRA_CONFIG_PATH ${CMAKE_CURRENT_LIST_DIR}/../common/mbedtls_extra_config.h CACHE PATH "Config to append to standard Mbed Crypto config, used by platforms to configure feature support")
+set(PLATFORM_DEFAULT_NV_SEED          OFF          CACHE BOOL      "Use default NV seed implementation.")
+
 # Enable authenticated encryption (AES-256-GCM) of ITS files. The AEAD key is
 # the on-chip IPSEC/OTP hardware key; the HAL is implemented in
 # common/tfm_hal_its_encryption.c + rtl8721f_evb/ameba_hw_gcm.c.

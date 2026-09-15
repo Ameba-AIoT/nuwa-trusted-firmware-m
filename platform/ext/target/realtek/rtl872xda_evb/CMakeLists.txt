@@ -96,6 +96,9 @@ target_sources(platform_s
         ${PLATFORM_DIR}/ext/target/arm/drivers/mpu/armv8m/mpu_armv8m_drv.c
         ${HAL_REALTEK_SOC_DIR}/fwlib/ram_common/ameba_flash_ram.c
         ${HAL_REALTEK_SOC_DIR}/swlib/log.c
+        # Entropy hooks backed by the on-chip TRNG; see CRYPTO_EXT_RNG in
+        # config_tfm_target.h. platform_s is the only target with an Mbed TLS config.
+        ../common/ameba_trng.c
         # ${HAL_REALTEK_SOC_DIR}/lib/chipinfo/ameba_rom_patch.c
         # $<$<AND:$<NOT:$<BOOL:${TFM_PARTITION_SLIH_TEST}>>,$<NOT:$<BOOL:${TFM_PARTITION_FLIH_TEST}>>>:${CMAKE_CURRENT_SOURCE_DIR}/native_drivers/timer_cmsdk/timer_cmsdk.c>
         # $<$<OR:$<BOOL:${TFM_S_REG_TEST}>,$<BOOL:${TFM_NS_REG_TEST}>>:${CMAKE_CURRENT_SOURCE_DIR}/plat_test.c>
@@ -103,8 +106,10 @@ target_sources(platform_s
         $<$<NOT:$<BOOL:${PLATFORM_DEFAULT_OTP}>>:${CMAKE_CURRENT_SOURCE_DIR}/../common/ameba_otp.c>
         $<$<NOT:$<BOOL:${PLATFORM_DEFAULT_OTP}>>:${AUTO_GEN_NONSECURE_PUB_C}>
         $<$<NOT:$<BOOL:${PLATFORM_DEFAULT_OTP}>>:${AUTO_GEN_SECURE_PUB_C}>
-        # ITS authenticated-encryption HAL (shared) + AmebaDplus HW GCM adapter.
+        # ITS authenticated-encryption HAL + HUK key derivation (shared),
+        # AmebaDplus HW GCM/HMAC adapter.
         $<$<AND:$<BOOL:${ITS_ENCRYPTION}>,$<BOOL:${TFM_PARTITION_INTERNAL_TRUSTED_STORAGE}>>:${CMAKE_CURRENT_SOURCE_DIR}/../common/tfm_hal_its_encryption.c>
+        $<$<AND:$<BOOL:${ITS_ENCRYPTION}>,$<BOOL:${TFM_PARTITION_INTERNAL_TRUSTED_STORAGE}>>:${CMAKE_CURRENT_SOURCE_DIR}/../common/ameba_its_key.c>
         $<$<AND:$<BOOL:${ITS_ENCRYPTION}>,$<BOOL:${TFM_PARTITION_INTERNAL_TRUSTED_STORAGE}>>:${CMAKE_CURRENT_SOURCE_DIR}/ameba_hw_gcm.c>
 )
 
