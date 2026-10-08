@@ -105,10 +105,21 @@ SECTIONS
         __vectors_start__ = .;
         KEEP(*(.vectors))
         . = ALIGN(4);
+        /*
+         * The RAM the bootloader must not overwrite when it re-loads this image on
+         * a wake that kept SRAM. Two words, immediately after the vector table so
+         * the bootloader can find them without knowing this layout; see
+         * __tfm_s_preserve_range in cmsis_core/startup_amebadplus.c.
+         */
+        __tfm_s_preserve_range_start__ = .;
+        KEEP(*(.tfm_s_preserve_range))
+        . = ALIGN(4);
         __vectors_end__ = .;
     } GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION) /* Special, need Bootlaoder Copy */
 
     ASSERT(__vectors_start__ != __vectors_end__, ".vectors should not be empty")
+    ASSERT(__tfm_s_preserve_range_start__ - __vectors_start__ == 8,
+           "the preserve range must follow the [MSP, Reset] vector pair, where the bootloader's resume path reads it from")
 
     . =  LOADADDR(.TFM_VECTORS) + SIZEOF(.TFM_VECTORS);
 
@@ -526,6 +537,19 @@ SECTIONS
         . = ALIGN(4);
         __bss_end__ = .;
     } GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+    /*
+     * The power-gate resume keeps one run of SRAM, published as
+     * __tfm_s_preserve_range and running from the partitions' data to __bss_end__
+     * (cmsis_core/startup_amebadplus.c). Everything the secure world must find
+     * intact on the wake has to lie inside it, so the run has to be contiguous:
+     * .TFM_BSS must come after the partitions' sections, not before or astride
+     * them. Asserted rather than assumed -- were the order to change, the sleep
+     * would clean the wrong span and the symptom would be one stale word rather
+     * than a fault.
+     */
+    ASSERT(__bss_start__ >= Image$$TFM_PSA_RW_STACK_END$$Base,
+           "the partitions' data must end before .TFM_BSS begins, so that the power-gate resume preserves one contiguous run")
+
     Image$$ER_TFM_DATA$$ZI$$Base = ADDR(.TFM_BSS);
     Image$$ER_TFM_DATA$$ZI$$Limit = ADDR(.TFM_BSS) + SIZEOF(.TFM_BSS);
     Image$$ER_PART_RT_POOL$$ZI$$Base = __partition_runtime_start__;
@@ -558,10 +582,12 @@ SECTIONS
 #endif /* BL2 */
 
     /* .noinit: NOLOAD section not covered by BSS zero; used for values that must
-     * survive the __PROGRAM_START BSS clear (e.g., DerivedKey_Bkup). */
+     * survive the __PROGRAM_START BSS clear (e.g., DerivedKey_Bkup), and for the
+     * core state the power-gate resume records (ameba_pm_resume.c). */
     .noinit (NOLOAD) : ALIGN(4)
     {
         *(.noinit*)
+        __noinit_end__ = .;
     } > RAMABLE_REGION
 
     PROVIDE(__stack = Image$$ARM_LIB_STACK$$ZI$$Limit);

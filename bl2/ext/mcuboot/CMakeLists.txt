@@ -186,7 +186,14 @@ if (PLATFORM_DEFAULT_IMAGE_SIGNING)
         SOURCES tfm_s_signed.bin
     )
     add_custom_command(OUTPUT tfm_s_signed.bin
-        DEPENDS tfm_s_bin signing_layout_s
+        # The image being signed, as a file path: `tfm_s_bin` names no target, and
+        # a target name would in any case be emitted as a ninja order-only dep,
+        # which sequences the rule without re-firing it when its input changes.
+        # Without the path here, a build that recompiles the secure image leaves
+        # tfm_s_signed.bin holding the previous one -- silently, since signing a
+        # stale image succeeds.
+        DEPENDS $<TARGET_FILE_DIR:tfm_s>/tfm_s.bin
+        DEPENDS signing_layout_s
         DEPENDS $<IF:$<BOOL:${MCUBOOT_GENERATE_SIGNING_KEYPAIR}>,generated_private_key,>
         WORKING_DIRECTORY ${MCUBOOT_PATH}/scripts
 

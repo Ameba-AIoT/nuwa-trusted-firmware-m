@@ -16,6 +16,7 @@
 #include "bootutil/image.h"
 #include <sysflash/sysflash.h>
 #include "region_defs.h"
+#include <stdbool.h>
 #include <string.h>
 #include <ameba_soc.h>		/* RomVectorTable */
 #if defined(SOC_AMEBAG2)
@@ -105,6 +106,23 @@ int32_t boot_platform_post_init(void)
 		memcpy(DerivedKey_Bkup, DerivedKey, sizeof(DerivedKey_Bkup));
 	}
 
+#if defined(SOC_AMEBAG2)
+	/*
+	 * The secure image reads LSYS_BIT_BOOT_WAKE_FROM_PS_HS to decide whether the
+	 * SRAM state it finds is still its own (cmsis_core/startup_amebag2.c), and a
+	 * reset taken while the AP was gated leaves it set. Reaching here means BL2 ran
+	 * its full path rather than BOOT_WakeFromPG(), so the non-secure world starts
+	 * from scratch and the secure image must too. Clear it.
+	 *
+	 * Per SoC, as the wake path is: only the amebagreen2 secure image reads this
+	 * flag so far. Through the non-secure alias, REG_LSYS_BOOT_CFG being marked
+	 * DD_SEC: bpc_cpu0.
+	 */
+	HAL_WRITE32(SYSTEM_CTRL_BASE, REG_LSYS_BOOT_CFG,
+		    HAL_READ32(SYSTEM_CTRL_BASE, REG_LSYS_BOOT_CFG) &
+			    ~LSYS_BIT_BOOT_WAKE_FROM_PS_HS);
+#endif /* SOC_AMEBAG2 */
+
 	return 0;
 }
 
@@ -159,12 +177,29 @@ int flash_device_base(uint8_t fd_id, uintptr_t *ret)
  * derived from the SDK's 4 KB flash-XIP bootloader boundary; see the SRAM
  * partitioning block in flash_layout.h).
  */
-static inline __attribute__((always_inline)) void boot_load_secure_image(void)
+/*
+ * Load the secure image into RAM.
+ *
+ * Only on a cold boot. A power-gate keeps SRAM, so on the wake path the image is
+ * already there -- code, data and all -- and re-loading it would overwrite the
+ * running system with its initial values: the payload holds .data as built and
+ * .bss as zeros, which is precisely the state the resume exists not to return to.
+ * The secure image re-enters through its own resume instead, see
+ * boot_enter_secure_image() below and cmsis_core/startup_amebadplus.c.
+ *
+ * Skipping it is also the bulk of the wake: 162 KB word-copied out of the flash
+ * window measured 6.3 ms of a 13 ms wake on amebadplus.
+ */
+static inline __attribute__((always_inline)) void boot_load_secure_image(bool pg_wake)
 {
 	const struct image_header *s_hdr;
 	volatile const uint32_t *src;
 	volatile uint32_t *dst;
 	uint32_t words;
+
+	if (pg_wake) {
+		return;
+	}
 
 	s_hdr = (const struct image_header *)(FLASH_BASE_ADDRESS +
 					      S_IMAGE_PRIMARY_PARTITION_OFFSET);
@@ -172,9 +207,7 @@ static inline __attribute__((always_inline)) void boot_load_secure_image(void)
 	dst = (uint32_t *)S_DATA_START;
 	words = (s_hdr->ih_img_size + 3) / 4;
 
-	BOOT_LOG_DBG("S img: hdr=0x%x sz=%u -> 0x%x",
-		     (unsigned)s_hdr, (unsigned)s_hdr->ih_img_size,
-		     (unsigned)S_DATA_START);
+	BOOT_LOG_DBG("S img: sz=%u", (unsigned)s_hdr->ih_img_size);
 
 	/* Copy the TFM-S image from RSIP-mapped flash to RAM, then make it
 	 * visible to TFM-S:
@@ -185,11 +218,13 @@ static inline __attribute__((always_inline)) void boot_load_secure_image(void)
 	 *    instructions are pulled from RAM on the next fetch. */
 	{
 		extern void DCache_CleanInvalidate(uint32_t addr, uint32_t bytes);
+
 		for (uint32_t i = 0; i < words; i++) {
 			dst[i] = src[i];
 		}
 		__DSB();
 		__ISB();
+
 		DCache_CleanInvalidate((uint32_t)dst, words * 4);
 		SCB->ICIALLU = 0;
 		__DSB();
@@ -199,7 +234,7 @@ static inline __attribute__((always_inline)) void boot_load_secure_image(void)
 
 void boot_platform_start_next_image(struct boot_arm_vector_table *vt)
 {
-	boot_load_secure_image();
+	boot_load_secure_image(false);
 
 	BOOT_LOG_DBG("vt->msp=0x%x vt->reset=0x%x",
 		     (unsigned)vt->msp, (unsigned)vt->reset);
@@ -215,7 +250,7 @@ void boot_platform_start_next_image(struct boot_arm_vector_table *vt)
 #else  /* !S_IMAGE_LOAD_ADDRESS */
 /* Executed in place from flash: nothing to load, and its initialised data is
  * restored from the flash LMA by the image's own startup copy table. */
-#define boot_load_secure_image() do { } while (0)
+#define boot_load_secure_image(pg_wake) do { (void)(pg_wake); } while (0)
 #endif /* S_IMAGE_LOAD_ADDRESS */
 
 /*
@@ -228,11 +263,11 @@ void boot_platform_start_next_image(struct boot_arm_vector_table *vt)
  * registered into the SoC's RAM vector table instead), and the image's own
  * startup installs whichever table it uses.
  */
-static __attribute__((noreturn)) void boot_enter_secure_image(void)
+static __attribute__((noreturn)) void boot_enter_secure_image(bool pg_wake)
 {
 	const uint32_t *vt;
 
-	boot_load_secure_image();
+	boot_load_secure_image(pg_wake);
 
 	vt = (const uint32_t *)S_IMAGE_VECTOR_TABLE;
 
@@ -255,18 +290,11 @@ static __attribute__((noreturn)) void boot_enter_secure_image(void)
  *
  * The loader's own body re-arms the non-secure world and jumps straight into
  * the non-secure image, which is right when the loader is itself the secure
- * world. With TF-M resident there it is not: power-gating loses the whole core
- * state, including the secure world's VTOR, MPU, SAU and stacks, so TF-M has to
- * re-initialise itself. BL2 is not re-run for that -- it would reset the
- * peripherals and restart the other core, which is the PM master and already
- * awake -- the secure image is simply re-entered as at the end of a cold boot.
- *
- * On a RAM-load platform the image must also be reloaded, not just re-entered:
- * it runs from RAM with its load address equal to its link address, so its
- * initialised data can only be restored by copying the image from flash again
- * (boot_load_secure_image() above). Without that, TF-M restarts with, for
- * instance, an already-consumed partition load list and never runs a single
- * partition.
+ * world. With TF-M resident there it is not: power-gating loses the core it was
+ * running on, so the secure image is re-entered to put that back. BL2 is not
+ * re-run for it -- that would reset the peripherals and restart the other core,
+ * which is the PM master and already awake -- and the image is not reloaded
+ * either, the resume being the point at which it keeps what SRAM held.
  *
  * The non-secure side is left untouched: its RAM (including Zephyr's
  * suspend-to-RAM CPU context) is retained, so when TF-M hands over, the
@@ -298,6 +326,18 @@ void BOOT_WakeFromPG(void)
 	__DSB();
 	__ISB();
 #elif defined(SOC_AMEBADPLUS)
+	/*
+	 * Power-gating clears the cache enables, and this entry replaces the ROM wake
+	 * path that would have restored them, so nothing has turned them back on: every
+	 * access from here on would go to SRAM. Measured on this path, 64 KB
+	 * word-copied: 40.1 ms with the caches off against 2.9 ms with them on.
+	 *
+	 * Their contents are undefined coming out of a power-gate, which is what
+	 * enabling them invalidates. AmebaG2 needs none of this, its wake path being
+	 * left exactly as the loader had it.
+	 */
+	Cache_Enable(ENABLE);
+
 	BOOT_TRNG_ParaSet();
 
 	/* Config Non-Security World Registers Firstly in BOOT_WakeFromPG */
@@ -309,7 +349,8 @@ void BOOT_WakeFromPG(void)
 #error "no power-gate wake path for this SoC"
 #endif
 
-	boot_enter_secure_image();
+	/* This is the wake: the secure image keeps what it asked to keep. */
+	boot_enter_secure_image(true);
 }
 
 

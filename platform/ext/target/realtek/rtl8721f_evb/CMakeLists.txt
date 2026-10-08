@@ -284,10 +284,19 @@ target_sources(tfm_spm
         ${CMAKE_CURRENT_SOURCE_DIR}/target_cfg.c
         ../common/tfm_hal_isolation.c
         ../common/tfm_hal_platform.c
+        # The power-gate resume. Part of tfm_spm rather than platform_s: it enters
+        # the NS agent thread directly, so it needs the SPM's own headers.
+        ../common/ameba_pm_resume.c
         # $<$<OR:$<BOOL:${CONFIG_TFM_FLIH_API}>,$<BOOL:${CONFIG_TFM_SLIH_API}>>:${CMAKE_CURRENT_SOURCE_DIR}/tfm_interrupts.c>
 )
 
 #========================= Files for building NS side platform ================#
+
+# The secure/non-secure PM contract, needed by both sides. Installed to the
+# non-secure interface rather than the platform directory because that is what
+# ends up on the non-secure build's include path.
+install(FILES       ${TARGET_PLATFORM_PATH}/../common/ameba_pm_tz_ioctl.h
+        DESTINATION ${INSTALL_INTERFACE_INC_DIR})
 
 install(DIRECTORY   ${TARGET_PLATFORM_PATH}/cmsis_core
                     # ${PLATFORM_DIR}/include/

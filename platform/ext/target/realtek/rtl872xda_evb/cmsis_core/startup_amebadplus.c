@@ -9,6 +9,9 @@
 #include "tfm_hal_device_header.h"
 #include "region.h"
 #include <string.h>
+#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
+#include "ameba_pm_resume.h"
+#endif
 
 /*----------------------------------------------------------------------------
   External References
@@ -20,10 +23,13 @@ extern uint64_t __STACK_SEAL;
 #endif
 
 extern __NO_RETURN void __PROGRAM_START(void);
+extern void __libc_init_array(void);
+extern int main(void);
 
 /* DerivedKey_Bkup: preserved across BSS clear; copied from ROM DerivedKey before
  * __PROGRAM_START zeros .TFM_BSS. Placed in .noinit (NOLOAD, not in zero table). */
 __attribute__((section(".noinit"))) u8 DerivedKey_Bkup[16];
+
 
 /*----------------------------------------------------------------------------
   Internal References
@@ -47,6 +53,7 @@ RAM_START_FUNCTION TFMEntryFun __VECTOR_TABLE_ATTRIBUTE = {
     NULL,
     (uint32_t)0
 };
+
 /* Minimal [MSP, Reset] flash vector table at the NS image start (section
  * .ns_boot_vectors). The secure->NS jump reads MSP/entry from here
  * (NS_AP_LOGIC_BASE + 0x400); without it the jump reads code bytes as MSP and
@@ -56,6 +63,52 @@ const VECTOR_TABLE_Type __ns_boot_vector_table[]
     __attribute__((section(".ns_boot_vectors"), used)) = {
     (VECTOR_TABLE_Type)(&__INITIAL_SP),
     Reset_Handler,
+};
+#endif
+
+#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
+/*
+ * True when the bootloader re-entered this image after a power-gate that kept
+ * SRAM. lib_pmc.a sets LSYS_BIT_BOOT_WAKE_FROM_PS_HS before the AP goes down and
+ * clears it only once the non-secure world has resumed, well after this runs; BL2
+ * clears it on its full boot path, so a reset taken while the AP was gated does
+ * not read as a wake. Read through the non-secure alias, REG_LSYS_BOOT_CFG being
+ * marked DD_SEC: bpc_cpu0.
+ */
+static bool boot_is_power_gate_wake(void)
+{
+	return (HAL_READ32(SYSTEM_CTRL_BASE, REG_LSYS_BOOT_CFG) &
+		LSYS_BIT_BOOT_WAKE_FROM_PS_HS) != 0U;
+}
+
+/*
+ * The RAM that has to survive the power-down for the resume to find a running
+ * system: everything the secure world holds in SRAM, from the partitions' data
+ * through the SPM's own and on to .TFM_BSS, which is where the partition and
+ * service runtime pools, the threads, the connection pool and the scheduler's
+ * own variables live.
+ *
+ * It survives on its own -- SRAM keeps its contents across an AP power-gate --
+ * but only as far as SRAM actually holds it. What the secure world last wrote
+ * may still be sitting in the D-cache, which does not survive, so this range is
+ * also what the sleep cleans; see AMEBA_PM_TZ_IOCTL_SUSPEND in
+ * ../../common/ameba_pm_tz_ioctl.h.
+ *
+ * Published here rather than worked out by the reader, because only this image
+ * knows where its sections ended up; the pair is read at a fixed offset past the
+ * vector table. An image without it reads as zeros, which the reader treats as
+ * "nothing to preserve".
+ *
+ * .TFM_BSS is NOLOAD, so it lies past the end of the image payload -- the run
+ * described here is wider than the image itself.
+ */
+extern uint32_t Image$$TFM_APP_RW_STACK_START$$Base;
+extern uint32_t __noinit_end__;
+
+const uint32_t __tfm_s_preserve_range[2]
+    __attribute__((section(".tfm_s_preserve_range"), used)) = {
+    (uint32_t)&Image$$TFM_APP_RW_STACK_START$$Base,
+    (uint32_t)&__noinit_end__,
 };
 #endif
 
@@ -79,9 +132,27 @@ void Reset_Handler(void)
 
 #if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
     __TZ_set_STACKSEAL_S((uint32_t *)(&__STACK_SEAL));
-#endif
 
-#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
+    if (boot_is_power_gate_wake()) {
+        /*
+         * A power-gate kept SRAM, so the secure world is all still there: the
+         * partition and service lists, the connection pool, the threads and their
+         * stacks. What it lost is the core, and the sleep recorded that.
+         *
+         * Taken here, before any of the boot work below, because none of that work
+         * applies: it prepares a core this path is about to configure from the
+         * record instead, and unmasking interrupts partway through would do so while
+         * the interrupt targets still read all-secure.
+         *
+         * Does not return; it enters the non-secure world.
+         */
+        ameba_pm_core_refill();
+    }
+
+    /*
+     * Drop whatever the caches hold: their contents are undefined out of a
+     * power-gate, and this is a cold boot in any case.
+     */
     u32 size  = (uint32_t)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_END, $$Limit) - (uint32_t)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_START, $$Base);
     u32 *dst = (uint32_t *)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_START, $$Base);
     u32 *src = (uint32_t *)&REGION_NAME(Image$$, TFM_UNPRIV_CODE_LOADADDR, $$Base);
@@ -146,6 +217,7 @@ void Reset_Handler(void)
 #endif
 
     SystemInit();                             /* CMSIS System Initialization */
+
     __PROGRAM_START();                        /* Enter PreMain (C library entry point) */
 }
 

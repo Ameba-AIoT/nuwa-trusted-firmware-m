@@ -526,6 +526,16 @@ SECTIONS
         . = ALIGN(4);
         __bss_end__ = .;
     } GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+    /*
+     * The resume path in cmsis_core/startup_*.c clears .TFM_BSS by hand while
+     * leaving the partitions' own sections alone, so the two must not overlap.
+     * Asserted rather than assumed: were a partition's .bss to land inside
+     * .TFM_BSS, that clear would wipe the very memory the resume preserves, and
+     * the symptom would be one stale word rather than a fault.
+     */
+    ASSERT(__bss_start__ >= Image$$TFM_PSA_RW_STACK_END$$Base,
+           "the partitions' data must end before .TFM_BSS begins, which the power-gate resume path relies on")
+
     Image$$ER_TFM_DATA$$ZI$$Base = ADDR(.TFM_BSS);
     Image$$ER_TFM_DATA$$ZI$$Limit = ADDR(.TFM_BSS) + SIZEOF(.TFM_BSS);
     Image$$ER_PART_RT_POOL$$ZI$$Base = __partition_runtime_start__;
@@ -535,6 +545,14 @@ SECTIONS
 
     Image$$ER_TFM_DATA$$Base = ADDR(.TFM_DATA);
     Image$$ER_TFM_DATA$$Limit = ADDR(.TFM_DATA) + SIZEOF(.TFM_DATA) + SIZEOF(.TFM_BSS);
+
+    /* The SPM's own initialised data, for the power-gate wake path in
+     * startup_amebag2.c, which restores this and clears .TFM_BSS while leaving the
+     * partitions' .data/.bss as the sleep left them.
+     */
+    __tfm_spm_data_load__ = LOADADDR(.TFM_DATA);
+    __tfm_spm_data_start__ = ADDR(.TFM_DATA);
+    __tfm_spm_data_size__ = SIZEOF(.TFM_DATA);
 
 #if defined(CONFIG_TFM_USE_TRUSTZONE)
     Image$$ER_VENEER$$Base = ADDR(.gnu.sgstubs);
