@@ -82,12 +82,7 @@ enum tfm_platform_err_t tfm_platform_hal_ioctl(tfm_platform_ioctl_req_t request,
 {
     (void)out_vec;
 
-#if defined(AMEBA_PM_CORE_RESUME)
-    if (request == AMEBA_PM_TZ_IOCTL_SUSPEND) {
-        return ameba_suspend_backup_core();
-    }
-#endif
-
+    /* In the order a sleep issues them. */
 #if defined(SOC_AMEBAG2)
     if (request == AMEBA_PMC_TZ_IOCTL_PPC_PERMISSION) {
         return ameba_permission(in_vec, REG_LSYS_SEC_PPC_CTRL, AMEBA_PMC_TZ_PPC_ALLOWED);
@@ -97,6 +92,13 @@ enum tfm_platform_err_t tfm_platform_hal_ioctl(tfm_platform_ioctl_req_t request,
     }
 #else
     (void)in_vec;
+#endif
+
+#if defined(AMEBA_PM_CORE_RESUME)
+    /* Last: it takes the D-cache away from everything after it. */
+    if (request == AMEBA_PM_TZ_IOCTL_SUSPEND) {
+        return ameba_suspend_backup_core();
+    }
 #endif
 
     (void)request;
